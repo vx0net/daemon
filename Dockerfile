@@ -1,5 +1,5 @@
 # VX0 Network Daemon - Multi-stage Docker build
-FROM rust:1.75-bullseye as builder
+FROM rust:1.76-slim-bookworm AS builder
 
 # Install additional dependencies
 RUN apt-get update && apt-get install -y \
@@ -11,7 +11,12 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy manifests
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
+
+# Build dependencies first (for better caching)
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release
+RUN rm -f target/release/deps/vx0net*
 
 # Copy source code
 COPY src ./src
@@ -20,12 +25,12 @@ COPY src ./src
 RUN cargo build --release
 
 # Runtime stage
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    libssl1.1 \
+    libssl3 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
