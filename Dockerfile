@@ -5,6 +5,7 @@ FROM rust:1.83-slim-bookworm AS builder
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -16,7 +17,14 @@ COPY . .
 # Build for release
 ENV CARGO_NET_RETRY=10
 ENV RUSTFLAGS="-C target-cpu=generic"
-RUN cargo build --release
+
+# Debug architecture info
+RUN echo "Build architecture: $(uname -m)" && \
+    echo "Rust target: $(rustc -vV | grep host)" && \
+    cargo build --release && \
+    echo "Binary info:" && \
+    file target/release/vx0net && \
+    ls -la target/release/vx0net
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -26,6 +34,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
     curl \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # Create vx0net user and group
@@ -37,6 +46,13 @@ RUN mkdir -p /app/config /app/certs /app/logs /app/data \
 
 # Copy the binary from builder stage
 COPY --from=builder /app/target/release/vx0net /usr/local/bin/vx0net
+
+# Debug runtime info and set permissions
+RUN echo "Runtime architecture: $(uname -m)" && \
+    echo "Binary permissions and info:" && \
+    ls -la /usr/local/bin/vx0net && \
+    file /usr/local/bin/vx0net && \
+    chmod +x /usr/local/bin/vx0net
 
 # Copy configuration templates
 COPY config/ /app/config/
