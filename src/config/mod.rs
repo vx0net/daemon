@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use config::{Config, ConfigError, Environment, File};
+use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -43,7 +43,7 @@ pub struct BGPConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DNSConfig {
     pub listen_port: u16,
-    pub vx0_dns_servers: Vec<String>,  // Only VX0 internal DNS servers
+    pub vx0_dns_servers: Vec<String>, // Only VX0 internal DNS servers
     pub cache_size: usize,
 }
 
@@ -132,7 +132,10 @@ impl Vx0Config {
             .set_default("network.bgp.hold_time", 90)?
             .set_default("network.bgp.keepalive_time", 30)?
             .set_default("network.dns.listen_port", 53)?
-            .set_default("network.dns.vx0_dns_servers", vec!["10.0.0.2:53", "10.0.0.3:53"])?
+            .set_default(
+                "network.dns.vx0_dns_servers",
+                vec!["10.0.0.2:53", "10.0.0.3:53"],
+            )?
             .set_default("network.dns.cache_size", 1000)?
             .set_default("network.routing.max_paths", 4)?
             .set_default("network.routing.local_preference", 100)?
@@ -143,8 +146,14 @@ impl Vx0Config {
             .set_default("security.ike.hash_algorithm", "SHA-256")?
             .set_default("security.ike.prf_algorithm", "HMAC-SHA256")?
             .set_default("security.certificates.ca_cert_path", "/etc/vx0net/ca.crt")?
-            .set_default("security.certificates.node_cert_path", "/etc/vx0net/node.crt")?
-            .set_default("security.certificates.node_key_path", "/etc/vx0net/node.key")?
+            .set_default(
+                "security.certificates.node_cert_path",
+                "/etc/vx0net/node.crt",
+            )?
+            .set_default(
+                "security.certificates.node_key_path",
+                "/etc/vx0net/node.key",
+            )?
             .set_default("security.encryption.cipher", "AES-256-GCM")?
             .set_default("security.encryption.key_size", 32)?
             .set_default("security.encryption.iv_size", 12)?
@@ -155,10 +164,10 @@ impl Vx0Config {
             .set_default("monitoring.metrics_port", 9090)?
             .set_default("monitoring.log_level", "info")?
             .build()?;
-            
+
         config.try_deserialize()
     }
-    
+
     pub fn save(&self, path: &str) -> Result<(), std::io::Error> {
         let toml_content = toml::to_string_pretty(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;

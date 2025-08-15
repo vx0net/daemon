@@ -1,17 +1,17 @@
+use crate::config::Vx0Config;
+use crate::network::ike::tunnels::{TunnelId, TunnelManager};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use std::sync::Arc;
-use crate::config::Vx0Config;
-use crate::network::ike::tunnels::{TunnelManager, TunnelId};
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
+pub mod bootstrap;
+pub mod discovery;
+pub mod joining;
 pub mod manager;
 pub mod peer;
-pub mod discovery;
-pub mod bootstrap;
-pub mod joining;
 
 pub type NodeId = Uuid;
 
@@ -33,25 +33,25 @@ pub struct Vx0Node {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NodeTier {
-    Backbone,    // Tier 1: Core routing infrastructure (ASN 65000-65099)
-    Regional,    // Tier 2: Regional distribution hubs (ASN 65100-65999) 
-    Edge,        // Tier 3: User-operated nodes (ASN 66000+)
+    Backbone, // Tier 1: Core routing infrastructure (ASN 65000-65099)
+    Regional, // Tier 2: Regional distribution hubs (ASN 65100-65999)
+    Edge,     // Tier 3: User-operated nodes (ASN 66000+)
 }
 
 impl NodeTier {
     pub fn get_asn_range(&self) -> (u32, u32) {
         match self {
-            NodeTier::Backbone => (65000, 65099),  // 100 backbone ASNs
-            NodeTier::Regional => (65100, 65999),  // 900 regional ASNs
-            NodeTier::Edge => (66000, 69999),      // 4000 edge ASNs
+            NodeTier::Backbone => (65000, 65099), // 100 backbone ASNs
+            NodeTier::Regional => (65100, 65999), // 900 regional ASNs
+            NodeTier::Edge => (66000, 69999),     // 4000 edge ASNs
         }
     }
 
     pub fn max_peers(&self) -> usize {
         match self {
-            NodeTier::Backbone => 50,  // High connectivity
-            NodeTier::Regional => 20,  // Moderate connectivity  
-            NodeTier::Edge => 5,       // Limited connectivity
+            NodeTier::Backbone => 50, // High connectivity
+            NodeTier::Regional => 20, // Moderate connectivity
+            NodeTier::Edge => 5,      // Limited connectivity
         }
     }
 
@@ -73,18 +73,18 @@ impl NodeTier {
 
     pub fn route_advertisement_policy(&self) -> RoutePolicy {
         match self {
-            NodeTier::Backbone => RoutePolicy::FullTable,     // Accept/advertise all routes
+            NodeTier::Backbone => RoutePolicy::FullTable, // Accept/advertise all routes
             NodeTier::Regional => RoutePolicy::RegionalFilter, // Filter by region/policy
-            NodeTier::Edge => RoutePolicy::DefaultOnly,       // Only default route + local
+            NodeTier::Edge => RoutePolicy::DefaultOnly,   // Only default route + local
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum RoutePolicy {
-    FullTable,       // Accept and advertise all routes
-    RegionalFilter,  // Filter routes based on regional policies
-    DefaultOnly,     // Only accept default route and advertise local services
+    FullTable,      // Accept and advertise all routes
+    RegionalFilter, // Filter routes based on regional policies
+    DefaultOnly,    // Only accept default route and advertise local services
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,11 +175,13 @@ pub enum NodeError {
 
 impl Vx0Node {
     pub fn new(config: Vx0Config) -> Result<Self, NodeError> {
-        let ipv4_addr = config.get_ipv4_addr()
+        let ipv4_addr = config
+            .get_ipv4_addr()
             .map_err(|e| NodeError::Config(format!("Invalid IPv4 address: {}", e)))?;
-        let ipv6_addr = config.get_ipv6_addr()
+        let ipv6_addr = config
+            .get_ipv6_addr()
             .map_err(|e| NodeError::Config(format!("Invalid IPv6 address: {}", e)))?;
-        
+
         let tier = match config.node.tier.as_str() {
             "Backbone" => NodeTier::Backbone,
             "Regional" => NodeTier::Regional,
@@ -194,14 +196,14 @@ impl Vx0Node {
         let (min_asn, max_asn) = tier.get_asn_range();
         if config.node.asn < min_asn || config.node.asn > max_asn {
             return Err(NodeError::Config(format!(
-                "ASN {} not valid for {:?} tier (valid range: {}-{})", 
+                "ASN {} not valid for {:?} tier (valid range: {}-{})",
                 config.node.asn, tier, min_asn, max_asn
             )));
         }
 
         let location = GeographicLocation {
             country: "US".to_string(),
-            region: "Unknown".to_string(), 
+            region: "Unknown".to_string(),
             city: config.node.location.clone(),
             latitude: 0.0,
             longitude: 0.0,
@@ -225,25 +227,25 @@ impl Vx0Node {
 
     pub async fn start(&self) -> Result<(), NodeError> {
         tracing::info!("Starting VX0 node {} (ASN: {})", self.hostname, self.asn);
-        
+
         // Initialize services
         self.start_monitoring().await?;
         self.start_service_discovery().await?;
-        
+
         tracing::info!("VX0 node started successfully");
         Ok(())
     }
 
     pub async fn stop(&self) -> Result<(), NodeError> {
         tracing::info!("Stopping VX0 node {}", self.hostname);
-        
+
         // Close all peer connections
         let mut peers = self.peers.write().await;
         for (peer_id, peer) in peers.iter_mut() {
             peer.status = ConnectionStatus::Disconnected;
             tracing::debug!("Disconnected from peer {}", peer_id);
         }
-        
+
         tracing::info!("VX0 node stopped");
         Ok(())
     }
@@ -252,36 +254,38 @@ impl Vx0Node {
         // Check if we've reached max peer limit for our tier
         let max_peers = self.tier.max_peers();
         let current_peers = self.get_peer_count().await;
-        
+
         if current_peers >= max_peers {
             return Err(NodeError::Network(format!(
-                "Maximum peer limit reached for {:?} tier ({}/{})", 
+                "Maximum peer limit reached for {:?} tier ({}/{})",
                 self.tier, current_peers, max_peers
             )));
         }
 
         // Determine peer tier from ASN
         let peer_tier = Self::asn_to_tier(peer.peer_asn);
-        
+
         // Check if this tier can peer with the other tier
         if !self.tier.can_peer_with(&peer_tier) {
             return Err(NodeError::Network(format!(
-                "{:?} nodes cannot peer with {:?} nodes", 
+                "{:?} nodes cannot peer with {:?} nodes",
                 self.tier, peer_tier
             )));
         }
 
         let peer_id = peer.peer_id;
         let peer_asn = peer.peer_asn;
-        
+
         let mut peers = self.peers.write().await;
         peers.insert(peer_id, peer);
-        
+
         tracing::info!(
-            "Added {:?} peer (ASN {}) to {:?} node", 
-            peer_tier, peer_asn, self.tier
+            "Added {:?} peer (ASN {}) to {:?} node",
+            peer_tier,
+            peer_asn,
+            self.tier
         );
-        
+
         Ok(())
     }
 
@@ -307,9 +311,11 @@ impl Vx0Node {
 
     pub async fn register_service(&self, service: HostedService) -> Result<(), NodeError> {
         if !service.domain.ends_with(".vx0") {
-            return Err(NodeError::Service("Service domain must end with .vx0".to_string()));
+            return Err(NodeError::Service(
+                "Service domain must end with .vx0".to_string(),
+            ));
         }
-        
+
         let mut services = self.services.write().await;
         services.push(service);
         Ok(())
@@ -326,16 +332,21 @@ impl Vx0Node {
     }
 
     // Tunnel management methods
-    pub async fn create_secure_tunnel(&self, peer_id: NodeId, peer_addr: SocketAddr, psk: &[u8]) -> Result<TunnelId, NodeError> {
-        tracing::info!("Creating secure tunnel to peer {} at {}", peer_id, peer_addr);
-        
-        let tunnel_id = self.tunnel_manager
-            .create_tunnel(
-                IpAddr::V4(self.ipv4_addr),
-                IpAddr::from(peer_addr.ip()),
-                peer_addr,
-                psk,
-            )
+    pub async fn create_secure_tunnel(
+        &self,
+        peer_id: NodeId,
+        peer_addr: SocketAddr,
+        psk: &[u8],
+    ) -> Result<TunnelId, NodeError> {
+        tracing::info!(
+            "Creating secure tunnel to peer {} at {}",
+            peer_id,
+            peer_addr
+        );
+
+        let tunnel_id = self
+            .tunnel_manager
+            .create_tunnel(IpAddr::V4(self.ipv4_addr), peer_addr.ip(), peer_addr, psk)
             .await
             .map_err(|e| NodeError::IKE(format!("Failed to create tunnel: {}", e)))?;
 
@@ -343,7 +354,11 @@ impl Vx0Node {
         let mut tunnels = self.active_tunnels.write().await;
         tunnels.insert(peer_id, tunnel_id);
 
-        tracing::info!("Secure tunnel {} established with peer {}", tunnel_id, peer_id);
+        tracing::info!(
+            "Secure tunnel {} established with peer {}",
+            tunnel_id,
+            peer_id
+        );
         Ok(tunnel_id)
     }
 
@@ -356,7 +371,10 @@ impl Vx0Node {
                 .map_err(|e| NodeError::IKE(format!("Failed to send secure data: {}", e)))?;
             Ok(())
         } else {
-            Err(NodeError::IKE(format!("No tunnel found for peer {}", peer_id)))
+            Err(NodeError::IKE(format!(
+                "No tunnel found for peer {}",
+                peer_id
+            )))
         }
     }
 
@@ -372,7 +390,10 @@ impl Vx0Node {
         Ok(())
     }
 
-    pub async fn get_tunnel_stats(&self, peer_id: &NodeId) -> Option<crate::network::ike::tunnels::TrafficStats> {
+    pub async fn get_tunnel_stats(
+        &self,
+        peer_id: &NodeId,
+    ) -> Option<crate::network::ike::tunnels::TrafficStats> {
         let tunnels = self.active_tunnels.read().await;
         if let Some(tunnel_id) = tunnels.get(peer_id) {
             self.tunnel_manager.get_tunnel_stats(tunnel_id).await
@@ -389,15 +410,21 @@ impl Vx0Node {
     pub async fn tunnel_health_check(&self) -> Result<HashMap<NodeId, bool>, NodeError> {
         let tunnels = self.active_tunnels.read().await;
         let mut health_status = HashMap::new();
-        
+
         for (peer_id, tunnel_id) in tunnels.iter() {
             if let Some(tunnel) = self.tunnel_manager.get_tunnel(tunnel_id).await {
-                health_status.insert(*peer_id, matches!(tunnel.status, crate::network::ike::tunnels::TunnelStatus::Established));
+                health_status.insert(
+                    *peer_id,
+                    matches!(
+                        tunnel.status,
+                        crate::network::ike::tunnels::TunnelStatus::Established
+                    ),
+                );
             } else {
                 health_status.insert(*peer_id, false);
             }
         }
-        
+
         Ok(health_status)
     }
 }

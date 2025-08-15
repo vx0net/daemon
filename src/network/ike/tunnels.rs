@@ -1,4 +1,4 @@
-use crate::network::ike::{IKESession, IKEError};
+use crate::network::ike::{IKEError, IKESession};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -56,9 +56,9 @@ impl TunnelManager {
         psk: &[u8],
     ) -> Result<TunnelId, IKEError> {
         let tunnel_id = Uuid::new_v4();
-        
+
         tracing::info!("Creating IPSec tunnel {} to {}", tunnel_id, remote_addr);
-        
+
         let mut ike_session = IKESession::new(peer_addr, 14)?; // DH Group 14
         ike_session.establish_tunnel(psk).await?;
 
@@ -81,7 +81,7 @@ impl TunnelManager {
 
     pub async fn close_tunnel(&self, tunnel_id: &TunnelId) -> Result<(), IKEError> {
         let mut tunnels = self.tunnels.write().await;
-        
+
         if let Some(mut tunnel) = tunnels.remove(tunnel_id) {
             tunnel.ike_session.close().await?;
             tunnel.status = TunnelStatus::Closed;
@@ -103,7 +103,7 @@ impl TunnelManager {
 
     pub async fn send_packet(&self, tunnel_id: &TunnelId, packet: &[u8]) -> Result<(), IKEError> {
         let mut tunnels = self.tunnels.write().await;
-        
+
         if let Some(tunnel) = tunnels.get_mut(tunnel_id) {
             if !matches!(tunnel.status, TunnelStatus::Established) {
                 return Err(IKEError::Protocol("Tunnel not established".to_string()));
@@ -111,11 +111,11 @@ impl TunnelManager {
 
             // Encrypt the packet
             let encrypted_packet = tunnel.ike_session.encrypt_payload(packet)?;
-            
+
             // In a real implementation, we would send this through a raw socket or TUN interface
             tracing::debug!(
-                "Sending encrypted packet through tunnel {} ({} bytes)", 
-                tunnel_id, 
+                "Sending encrypted packet through tunnel {} ({} bytes)",
+                tunnel_id,
                 encrypted_packet.len()
             );
 
@@ -130,9 +130,13 @@ impl TunnelManager {
         Ok(())
     }
 
-    pub async fn receive_packet(&self, tunnel_id: &TunnelId, encrypted_packet: &[u8]) -> Result<Vec<u8>, IKEError> {
+    pub async fn receive_packet(
+        &self,
+        tunnel_id: &TunnelId,
+        encrypted_packet: &[u8],
+    ) -> Result<Vec<u8>, IKEError> {
         let mut tunnels = self.tunnels.write().await;
-        
+
         if let Some(tunnel) = tunnels.get_mut(tunnel_id) {
             if !matches!(tunnel.status, TunnelStatus::Established) {
                 return Err(IKEError::Protocol("Tunnel not established".to_string()));
@@ -140,10 +144,10 @@ impl TunnelManager {
 
             // Decrypt the packet
             let decrypted_packet = tunnel.ike_session.decrypt_payload(encrypted_packet)?;
-            
+
             tracing::debug!(
-                "Received and decrypted packet through tunnel {} ({} bytes)", 
-                tunnel_id, 
+                "Received and decrypted packet through tunnel {} ({} bytes)",
+                tunnel_id,
                 decrypted_packet.len()
             );
 
@@ -160,12 +164,12 @@ impl TunnelManager {
 
     pub async fn rekey_tunnel(&self, tunnel_id: &TunnelId) -> Result<(), IKEError> {
         let mut tunnels = self.tunnels.write().await;
-        
+
         if let Some(tunnel) = tunnels.get_mut(tunnel_id) {
             tunnel.status = TunnelStatus::Rekeying;
             tunnel.ike_session.rekey().await?;
             tunnel.status = TunnelStatus::Established;
-            
+
             tracing::info!("Rekeyed tunnel {}", tunnel_id);
         }
 
@@ -194,6 +198,12 @@ impl TunnelManager {
             tunnels.remove(&tunnel_id);
             tracing::info!("Cleaned up failed tunnel {}", tunnel_id);
         }
+    }
+}
+
+impl Default for TrafficStats {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

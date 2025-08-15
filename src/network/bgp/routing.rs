@@ -1,4 +1,4 @@
-use crate::network::bgp::{RouteTable, RouteEntry, BGPOrigin};
+use crate::network::bgp::{BGPOrigin, RouteEntry, RouteTable};
 use crate::node::{NodeTier, RoutePolicy};
 use ipnet::IpNet;
 use std::net::IpAddr;
@@ -14,7 +14,7 @@ pub struct RoutingPolicy {
 impl RoutingPolicy {
     pub fn new(local_asn: u32, node_tier: NodeTier) -> Self {
         let route_policy = node_tier.route_advertisement_policy();
-        
+
         RoutingPolicy {
             local_asn,
             node_tier,
@@ -27,7 +27,7 @@ impl RoutingPolicy {
     /// Check if we should accept a route based on our tier policy
     pub fn should_accept_route(&self, route: &RouteEntry, peer_asn: u32) -> bool {
         let peer_tier = Self::asn_to_tier(peer_asn);
-        
+
         match &self.route_policy {
             RoutePolicy::FullTable => {
                 // Backbone nodes accept all routes from valid peers
@@ -47,7 +47,7 @@ impl RoutingPolicy {
     /// Check if we should advertise a route to a peer
     pub fn should_advertise_route(&self, route: &RouteEntry, peer_asn: u32) -> bool {
         let peer_tier = Self::asn_to_tier(peer_asn);
-        
+
         match &self.route_policy {
             RoutePolicy::FullTable => {
                 // Backbone advertises all routes (with loop prevention)
@@ -66,10 +66,10 @@ impl RoutingPolicy {
 
     fn apply_regional_filter(&self, route: &RouteEntry, peer_tier: NodeTier) -> bool {
         match peer_tier {
-            NodeTier::Backbone => true,  // Accept all from backbone
+            NodeTier::Backbone => true, // Accept all from backbone
             NodeTier::Regional => {
                 // Accept regional routes and local services
-                route.as_path.len() <= 3  // Limit path length
+                route.as_path.len() <= 3 // Limit path length
             }
             NodeTier::Edge => {
                 // Only accept local service announcements from edge
@@ -98,15 +98,15 @@ impl RoutingPolicy {
     fn asn_to_tier(asn: u32) -> NodeTier {
         match asn {
             65000..=65099 => NodeTier::Backbone,
-            65100..=65999 => NodeTier::Regional, 
+            65100..=65999 => NodeTier::Regional,
             66000..=69999 => NodeTier::Edge,
             _ => NodeTier::Edge,
         }
     }
 
     fn is_default_route(&self, route: &RouteEntry) -> bool {
-        route.network == "0.0.0.0/0".parse().unwrap() || 
-        route.network == "10.0.0.0/8".parse().unwrap()  // VX0 default
+        route.network == "0.0.0.0/0".parse().unwrap()
+            || route.network == "10.0.0.0/8".parse().unwrap() // VX0 default
     }
 
     fn is_local_route(&self, route: &RouteEntry) -> bool {
@@ -114,7 +114,7 @@ impl RoutingPolicy {
     }
 
     fn is_local_announcement(&self, route: &RouteEntry, peer_asn: u32) -> bool {
-        route.as_path == vec![peer_asn]  // Direct announcement from peer
+        route.as_path == vec![peer_asn] // Direct announcement from peer
     }
 
     fn is_local_service_route(&self, route: &RouteEntry) -> bool {
@@ -124,7 +124,7 @@ impl RoutingPolicy {
 
     fn is_aggregatable_route(&self, route: &RouteEntry) -> bool {
         // Routes that can be aggregated for backbone advertisement
-        route.network.prefix_len() <= 16  // Only larger prefixes
+        route.network.prefix_len() <= 16 // Only larger prefixes
     }
 
     fn is_reachable_service(&self, route: &RouteEntry) -> bool {
@@ -205,7 +205,11 @@ impl RouteTable {
             .collect()
     }
 
-    pub fn announce_vx0_network(&mut self, vx0_network: IpNet, local_asn: u32) -> Result<(), crate::network::bgp::BGPError> {
+    pub fn announce_vx0_network(
+        &mut self,
+        vx0_network: IpNet,
+        local_asn: u32,
+    ) -> Result<(), crate::network::bgp::BGPError> {
         let route = RouteEntry {
             network: vx0_network,
             next_hop: "10.0.0.1".parse().unwrap(), // VX0 gateway
@@ -229,8 +233,8 @@ mod tests {
 
     #[test]
     fn test_route_evaluation() {
-        let policy = RoutingPolicy::new(65001);
-        
+        let policy = RoutingPolicy::new(65001, crate::node::NodeTier::Edge);
+
         let route = RouteEntry {
             network: "10.0.0.0/24".parse().unwrap(),
             next_hop: "192.168.1.1".parse().unwrap(),
@@ -248,8 +252,8 @@ mod tests {
 
     #[test]
     fn test_best_route_selection() {
-        let policy = RoutingPolicy::new(65001);
-        
+        let policy = RoutingPolicy::new(65001, crate::node::NodeTier::Edge);
+
         let route1 = RouteEntry {
             network: "10.0.0.0/24".parse().unwrap(),
             next_hop: "192.168.1.1".parse().unwrap(),
@@ -274,7 +278,7 @@ mod tests {
 
         let routes = vec![route1, route2];
         let best = policy.select_best_route(&routes);
-        
+
         assert!(best.is_some());
         assert_eq!(best.unwrap().local_pref, 150);
     }

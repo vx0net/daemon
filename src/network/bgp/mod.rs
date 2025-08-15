@@ -1,15 +1,15 @@
-use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
-pub mod session;
-pub mod routing;
 pub mod messages;
 pub mod protocol;
+pub mod routing;
+pub mod session;
 
 #[derive(Debug, Clone)]
 pub struct BGPSession {
@@ -52,8 +52,8 @@ pub struct RouteEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BGPOrigin {
-    IGP = 0,    // Interior Gateway Protocol
-    EGP = 1,    // Exterior Gateway Protocol  
+    IGP = 0, // Interior Gateway Protocol
+    EGP = 1, // Exterior Gateway Protocol
     Incomplete = 2,
 }
 
@@ -81,6 +81,7 @@ pub enum BGPError {
 
 pub struct BGPDaemon {
     local_asn: u32,
+    #[allow(dead_code)]
     router_id: IpAddr,
     listen_port: u16,
     sessions: Arc<RwLock<HashMap<IpAddr, BGPSession>>>,
@@ -101,7 +102,7 @@ impl BGPDaemon {
     pub async fn start(&self) -> Result<(), BGPError> {
         let listen_addr = format!("0.0.0.0:{}", self.listen_port);
         let listener = TcpListener::bind(&listen_addr).await?;
-        
+
         tracing::info!("BGP daemon listening on {}", listen_addr);
 
         let sessions = Arc::clone(&self.sessions);
@@ -113,12 +114,20 @@ impl BGPDaemon {
                 match listener.accept().await {
                     Ok((stream, addr)) => {
                         tracing::info!("BGP connection from {}", addr);
-                        
+
                         let sessions = Arc::clone(&sessions);
                         let route_table = Arc::clone(&route_table);
-                        
+
                         tokio::spawn(async move {
-                            if let Err(e) = Self::handle_connection(stream, addr, local_asn, sessions, route_table).await {
+                            if let Err(e) = Self::handle_connection(
+                                stream,
+                                addr,
+                                local_asn,
+                                sessions,
+                                route_table,
+                            )
+                            .await
+                            {
                                 tracing::error!("BGP connection error: {}", e);
                             }
                         });
@@ -141,9 +150,9 @@ impl BGPDaemon {
         route_table: Arc<RwLock<RouteTable>>,
     ) -> Result<(), BGPError> {
         tracing::debug!("Handling BGP connection from {}", addr);
-        
+
         let session = BGPSession::new(local_asn, 65002, addr.ip(), Arc::clone(&route_table));
-        
+
         {
             let mut sessions = sessions.write().await;
             sessions.insert(addr.ip(), session);
@@ -151,11 +160,16 @@ impl BGPDaemon {
 
         // For now, just log the connection
         tracing::info!("BGP session established with {}", addr.ip());
-        
+
         Ok(())
     }
 
-    pub async fn add_route(&self, network: IpNet, next_hop: IpAddr, origin: BGPOrigin) -> Result<(), BGPError> {
+    pub async fn add_route(
+        &self,
+        network: IpNet,
+        next_hop: IpAddr,
+        origin: BGPOrigin,
+    ) -> Result<(), BGPError> {
         let route = RouteEntry {
             network,
             next_hop,
@@ -169,7 +183,7 @@ impl BGPDaemon {
 
         let mut table = self.route_table.write().await;
         table.add_route(route)?;
-        
+
         tracing::info!("Added route: {} via {}", network, next_hop);
         Ok(())
     }
@@ -181,7 +195,12 @@ impl BGPDaemon {
 }
 
 impl BGPSession {
-    pub fn new(local_asn: u32, peer_asn: u32, peer_ip: IpAddr, route_table: Arc<RwLock<RouteTable>>) -> Self {
+    pub fn new(
+        local_asn: u32,
+        peer_asn: u32,
+        peer_ip: IpAddr,
+        route_table: Arc<RwLock<RouteTable>>,
+    ) -> Self {
         BGPSession {
             peer_asn,
             local_asn,
@@ -195,15 +214,25 @@ impl BGPSession {
 
     pub async fn establish(&mut self) -> Result<(), BGPError> {
         self.state = BGPSessionState::Connect;
-        tracing::info!("Establishing BGP session with ASN {} at {}", self.peer_asn, self.peer_ip);
-        
+        tracing::info!(
+            "Establishing BGP session with ASN {} at {}",
+            self.peer_asn,
+            self.peer_ip
+        );
+
         // Simulate session establishment
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         self.state = BGPSessionState::Established;
         tracing::info!("BGP session established with {}", self.peer_ip);
-        
+
         Ok(())
+    }
+}
+
+impl Default for RouteTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

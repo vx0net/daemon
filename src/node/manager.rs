@@ -1,4 +1,4 @@
-use crate::node::{Vx0Node, NodeError, ConnectionStatus};
+use crate::node::{ConnectionStatus, NodeError, Vx0Node};
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
 
@@ -13,7 +13,7 @@ impl NodeManager {
 
     pub async fn run(&self) -> Result<(), NodeError> {
         let node = Arc::clone(&self.node);
-        
+
         // Start peer management task
         let peer_manager = Arc::clone(&node);
         tokio::spawn(async move {
@@ -44,9 +44,9 @@ impl Vx0Node {
     async fn manage_peers(&self) -> Result<(), NodeError> {
         let peers = self.peers.read().await;
         let peer_count = peers.len();
-        
+
         tracing::debug!("Managing {} peer connections", peer_count);
-        
+
         for (peer_id, peer) in peers.iter() {
             match peer.status {
                 ConnectionStatus::Failed => {
@@ -58,7 +58,7 @@ impl Vx0Node {
                 _ => {}
             }
         }
-        
+
         Ok(())
     }
 
@@ -68,10 +68,10 @@ impl Vx0Node {
             let services = self.services.read().await;
             services.len()
         };
-        
+
         tracing::debug!(
-            "Node health check: {} peers, {} services", 
-            peer_count, 
+            "Node health check: {} peers, {} services",
+            peer_count,
             service_count
         );
     }

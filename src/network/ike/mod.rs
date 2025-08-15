@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
-use serde::{Deserialize, Serialize};
-use ring::{hmac, rand};
 use rand::SecureRandom;
+use ring::{hmac, rand};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
-pub mod session;
 pub mod crypto;
+pub mod session;
 pub mod tunnels;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,7 +132,8 @@ impl IKESession {
     pub fn new(peer_addr: SocketAddr, dh_group: u8) -> Result<Self, IKEError> {
         let rng = rand::SystemRandom::new();
         let mut local_spi = [0u8; 8];
-        rng.fill(&mut local_spi).map_err(|e| IKEError::Crypto(format!("RNG error: {:?}", e)))?;
+        rng.fill(&mut local_spi)
+            .map_err(|e| IKEError::Crypto(format!("RNG error: {:?}", e)))?;
 
         Ok(IKESession {
             local_spi: u64::from_be_bytes(local_spi),
@@ -148,35 +149,35 @@ impl IKESession {
 
     pub async fn establish_tunnel(&mut self, psk: &[u8]) -> Result<(), IKEError> {
         tracing::info!("Establishing IKE tunnel to {}", self.peer_addr);
-        
+
         // Phase 1: IKE_SA_INIT exchange
         self.perform_sa_init().await?;
-        
-        // Phase 2: IKE_AUTH exchange  
+
+        // Phase 2: IKE_AUTH exchange
         self.perform_auth(psk).await?;
-        
+
         self.state = IKEState::Established;
         tracing::info!("IKE tunnel established successfully");
-        
+
         Ok(())
     }
 
     async fn perform_sa_init(&mut self) -> Result<(), IKEError> {
         tracing::debug!("Performing IKE_SA_INIT exchange");
-        
+
         self.state = IKEState::SaInit;
-        
+
         // Generate DH key pair
-        let (public_key, private_key) = self.generate_dh_keypair()?;
-        
+        let (public_key, _private_key) = self.generate_dh_keypair()?;
+
         // Create SA proposal
         let sa_payload = self.create_sa_proposal();
-        
+
         // Generate nonce
         let nonce = self.generate_nonce()?;
-        
+
         // Create IKE_SA_INIT request
-        let init_message = IKEMessage {
+        let _init_message = IKEMessage {
             initiator_spi: self.local_spi,
             responder_spi: 0,
             next_payload: 0,
@@ -191,31 +192,29 @@ impl IKESession {
                     dh_group: self.dh_group as u16,
                     key_exchange_data: public_key,
                 }),
-                IKEPayload::Nonce(NoncePayload {
-                    nonce_data: nonce,
-                }),
+                IKEPayload::Nonce(NoncePayload { nonce_data: nonce }),
             ],
         };
 
         // For now, just simulate the exchange
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        
+
         // Simulate receiving response and computing shared secret
         self.shared_secret = vec![0x42; 32]; // Placeholder
         self.derive_keys()?;
-        
+
         Ok(())
     }
 
     async fn perform_auth(&mut self, psk: &[u8]) -> Result<(), IKEError> {
         tracing::debug!("Performing IKE_AUTH exchange");
-        
+
         self.state = IKEState::Auth;
-        
+
         // Create authentication data
         let auth_data = self.create_auth_data(psk)?;
-        
-        let auth_message = IKEMessage {
+
+        let _auth_message = IKEMessage {
             initiator_spi: self.local_spi,
             responder_spi: self.remote_spi,
             next_payload: 0,
@@ -224,58 +223,55 @@ impl IKESession {
             flags: 0x08,
             message_id: 1,
             length: 0,
-            payloads: vec![
-                IKEPayload::Authentication(AuthPayload {
-                    auth_method: 2, // PSK
-                    auth_data,
-                }),
-            ],
+            payloads: vec![IKEPayload::Authentication(AuthPayload {
+                auth_method: 2, // PSK
+                auth_data,
+            })],
         };
 
         // Simulate the exchange
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        
+
         Ok(())
     }
 
     fn create_sa_proposal(&self) -> SAPayload {
         SAPayload {
-            proposals: vec![
-                SAProposal {
-                    proposal_num: 1,
-                    protocol_id: 1, // IKE
-                    spi: Vec::new(),
-                    transforms: vec![
-                        Transform {
-                            transform_type: 1, // Encryption
-                            transform_id: 20, // AES-256-GCM
-                            attributes: vec![],
-                        },
-                        Transform {
-                            transform_type: 2, // PRF
-                            transform_id: 5, // HMAC-SHA256
-                            attributes: vec![],
-                        },
-                        Transform {
-                            transform_type: 3, // Integrity
-                            transform_id: 12, // AUTH_HMAC_SHA2_256_128
-                            attributes: vec![],
-                        },
-                        Transform {
-                            transform_type: 4, // DH Group
-                            transform_id: self.dh_group as u16,
-                            attributes: vec![],
-                        },
-                    ],
-                },
-            ],
+            proposals: vec![SAProposal {
+                proposal_num: 1,
+                protocol_id: 1, // IKE
+                spi: Vec::new(),
+                transforms: vec![
+                    Transform {
+                        transform_type: 1, // Encryption
+                        transform_id: 20,  // AES-256-GCM
+                        attributes: vec![],
+                    },
+                    Transform {
+                        transform_type: 2, // PRF
+                        transform_id: 5,   // HMAC-SHA256
+                        attributes: vec![],
+                    },
+                    Transform {
+                        transform_type: 3, // Integrity
+                        transform_id: 12,  // AUTH_HMAC_SHA2_256_128
+                        attributes: vec![],
+                    },
+                    Transform {
+                        transform_type: 4, // DH Group
+                        transform_id: self.dh_group as u16,
+                        attributes: vec![],
+                    },
+                ],
+            }],
         }
     }
 
     fn generate_nonce(&self) -> Result<Vec<u8>, IKEError> {
         let rng = rand::SystemRandom::new();
         let mut nonce = vec![0u8; 32];
-        rng.fill(&mut nonce).map_err(|e| IKEError::Crypto(format!("Nonce generation failed: {:?}", e)))?;
+        rng.fill(&mut nonce)
+            .map_err(|e| IKEError::Crypto(format!("Nonce generation failed: {:?}", e)))?;
         Ok(nonce)
     }
 
@@ -283,35 +279,37 @@ impl IKESession {
         // Simplified DH key generation - in a real implementation,
         // this would use proper DH groups (14, 19, 20, etc.)
         let rng = rand::SystemRandom::new();
-        
+
         let mut private_key = vec![0u8; 32];
         let mut public_key = vec![0u8; 32];
-        
-        rng.fill(&mut private_key).map_err(|e| IKEError::Crypto(format!("Private key generation failed: {:?}", e)))?;
-        rng.fill(&mut public_key).map_err(|e| IKEError::Crypto(format!("Public key generation failed: {:?}", e)))?;
-        
+
+        rng.fill(&mut private_key)
+            .map_err(|e| IKEError::Crypto(format!("Private key generation failed: {:?}", e)))?;
+        rng.fill(&mut public_key)
+            .map_err(|e| IKEError::Crypto(format!("Public key generation failed: {:?}", e)))?;
+
         Ok((public_key, private_key))
     }
 
     fn derive_keys(&mut self) -> Result<(), IKEError> {
         // Simplified key derivation - in production, use proper HKDF
         let key_material = self.shared_secret.clone();
-        
+
         // Derive 32-byte encryption key
         let mut encryption_key = vec![0u8; 32];
         for (i, byte) in key_material.iter().cycle().enumerate().take(32) {
             encryption_key[i] = *byte ^ (i as u8);
         }
-        
+
         // Derive 32-byte authentication key
         let mut auth_key = vec![0u8; 32];
         for (i, byte) in key_material.iter().cycle().enumerate().take(32) {
             auth_key[i] = *byte ^ ((i + 1) as u8);
         }
-        
+
         self.encryption_key = encryption_key;
         self.authentication_key = auth_key;
-        
+
         Ok(())
     }
 
@@ -330,5 +328,4 @@ impl IKESession {
         tracing::info!("IKE session closed");
         Ok(())
     }
-
 }

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::network::bgp::{BGPOrigin, RouteEntry};
 use ipnet::IpNet;
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,10 +81,10 @@ impl BGPMessage {
 
         for route in routes {
             nlri.push(route.network);
-            
+
             // Add ORIGIN attribute
             path_attributes.push(PathAttribute {
-                flags: 0x40, // Well-known mandatory
+                flags: 0x40,  // Well-known mandatory
                 type_code: 1, // ORIGIN
                 length: 1,
                 value: AttributeValue::Origin(route.origin),
@@ -92,7 +92,7 @@ impl BGPMessage {
 
             // Add AS_PATH attribute
             path_attributes.push(PathAttribute {
-                flags: 0x40, // Well-known mandatory
+                flags: 0x40,  // Well-known mandatory
                 type_code: 2, // AS_PATH
                 length: (route.as_path.len() * 4) as u16,
                 value: AttributeValue::AsPath(route.as_path),
@@ -100,7 +100,7 @@ impl BGPMessage {
 
             // Add NEXT_HOP attribute
             path_attributes.push(PathAttribute {
-                flags: 0x40, // Well-known mandatory
+                flags: 0x40,  // Well-known mandatory
                 type_code: 3, // NEXT_HOP
                 length: 4,
                 value: AttributeValue::NextHop(route.next_hop),
@@ -109,7 +109,7 @@ impl BGPMessage {
             // Add LOCAL_PREF attribute (if present)
             if route.local_pref != 100 {
                 path_attributes.push(PathAttribute {
-                    flags: 0x40, // Well-known discretionary
+                    flags: 0x40,  // Well-known discretionary
                     type_code: 5, // LOCAL_PREF
                     length: 4,
                     value: AttributeValue::LocalPref(route.local_pref),
@@ -119,7 +119,7 @@ impl BGPMessage {
             // Add MED attribute (if present)
             if route.med != 0 {
                 path_attributes.push(PathAttribute {
-                    flags: 0x80, // Optional non-transitive
+                    flags: 0x80,  // Optional non-transitive
                     type_code: 4, // MULTI_EXIT_DISC
                     length: 4,
                     value: AttributeValue::MultiExitDisc(route.med),

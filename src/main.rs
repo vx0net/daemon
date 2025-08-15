@@ -1,14 +1,13 @@
 use clap::{Parser, Subcommand};
-use tracing::{info, error, debug};
-use tracing_subscriber;
+use rand::random;
 use std::sync::Arc;
 use tokio::signal;
-use rand;
+use tracing::{debug, error, info};
 
-use vx0net_daemon::{Vx0Config, Vx0Node, NodeError};
-use vx0net_daemon::node::manager::NodeManager;
 use vx0net_daemon::network::bgp::BGPDaemon;
 use vx0net_daemon::network::ike::session::IKEDaemon;
+use vx0net_daemon::node::manager::NodeManager;
+use vx0net_daemon::{NodeError, Vx0Config, Vx0Node};
 
 #[derive(Parser)]
 #[command(name = "vx0net")]
@@ -17,10 +16,10 @@ use vx0net_daemon::network::ike::session::IKEDaemon;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-    
+
     #[arg(short, long, default_value = "info")]
     log_level: String,
-    
+
     #[arg(short, long)]
     config: Option<String>,
 }
@@ -81,7 +80,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    
+
     // Initialize tracing
     let log_level = match cli.log_level.as_str() {
         "trace" => tracing::Level::TRACE,
@@ -100,7 +99,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("VX0 Network Daemon v0.1.0");
 
     match cli.command {
-        Commands::Start { foreground, join_network } => {
+        Commands::Start {
+            foreground,
+            join_network,
+        } => {
             start_daemon(foreground, join_network).await?;
         }
         Commands::Stop => {
@@ -145,9 +147,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn start_daemon(foreground: bool, join_network: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn start_daemon(
+    foreground: bool,
+    join_network: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting VX0 network daemon...");
-    
+
     if !foreground {
         info!("Running in daemon mode");
     }
@@ -158,7 +163,10 @@ async fn start_daemon(foreground: bool, join_network: bool) -> Result<(), Box<dy
         e
     })?;
 
-    debug!("Configuration loaded: ASN {}, Hostname: {}", config.node.asn, config.node.hostname);
+    debug!(
+        "Configuration loaded: ASN {}, Hostname: {}",
+        config.node.asn, config.node.hostname
+    );
 
     // Create VX0 node
     let node = Arc::new(Vx0Node::new(config.clone())?);
@@ -176,9 +184,8 @@ async fn start_daemon(foreground: bool, join_network: bool) -> Result<(), Box<dy
     bgp_daemon.start().await?;
 
     // Start IKE daemon
-    let mut ike_daemon = IKEDaemon::new(
-        format!("0.0.0.0:{}", config.security.ike.listen_port).parse()?
-    );
+    let mut ike_daemon =
+        IKEDaemon::new(format!("0.0.0.0:{}", config.security.ike.listen_port).parse()?);
     ike_daemon.start().await?;
 
     // Start node manager
@@ -187,15 +194,23 @@ async fn start_daemon(foreground: bool, join_network: bool) -> Result<(), Box<dy
 
     // Add some VX0 network routes
     let vx0_network: ipnet::IpNet = "10.0.0.0/8".parse()?;
-    bgp_daemon.add_route(
-        vx0_network, 
-        "10.0.0.1".parse()?,
-        vx0net_daemon::network::bgp::BGPOrigin::IGP
-    ).await?;
+    bgp_daemon
+        .add_route(
+            vx0_network,
+            "10.0.0.1".parse()?,
+            vx0net_daemon::network::bgp::BGPOrigin::IGP,
+        )
+        .await?;
 
     info!("VX0 network daemon started successfully");
-    info!("Listening for BGP connections on port {}", config.network.bgp.listen_port);
-    info!("Listening for IKE connections on port {}", config.security.ike.listen_port);
+    info!(
+        "Listening for BGP connections on port {}",
+        config.network.bgp.listen_port
+    );
+    info!(
+        "Listening for IKE connections on port {}",
+        config.security.ike.listen_port
+    );
 
     // Auto-join network if requested
     if join_network {
@@ -228,7 +243,7 @@ async fn start_daemon(foreground: bool, join_network: bool) -> Result<(), Box<dy
 async fn show_node_info() -> Result<(), NodeError> {
     let config = Vx0Config::load().map_err(|e| NodeError::Config(e.to_string()))?;
     let node = Vx0Node::new(config)?;
-    
+
     println!("VX0 Node Information:");
     println!("  Node ID: {}", node.node_id);
     println!("  Hostname: {}", node.hostname);
@@ -248,7 +263,7 @@ async fn show_routes() -> Result<(), Box<dyn std::error::Error>> {
     println!("  10.0.0.0/8       10.0.0.1        65001      IGP");
     println!("  vx0.network      10.0.1.1        65001      IGP");
     // In a real implementation, we would query the actual routing table
-    
+
     Ok(())
 }
 
@@ -257,22 +272,26 @@ async fn show_peers() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Peer IP          ASN      Status       Uptime");
     println!("  192.168.1.100    65002    Connected    00:15:42");
     // In a real implementation, we would query the actual peer list
-    
+
     Ok(())
 }
 
-async fn register_service(name: &str, domain: &str, port: u16) -> Result<(), Box<dyn std::error::Error>> {
+async fn register_service(
+    name: &str,
+    domain: &str,
+    port: u16,
+) -> Result<(), Box<dyn std::error::Error>> {
     if !domain.ends_with(".vx0") {
         return Err("Service domain must end with .vx0".into());
     }
 
     info!("Registering service '{}' at {}:{}", name, domain, port);
-    
+
     // In a real implementation, we would:
     // 1. Register the service in the local service registry
     // 2. Announce it to the VX0 DNS network
     // 3. Update BGP routing if needed
-    
+
     info!("Service '{}' registered successfully", name);
     Ok(())
 }
@@ -281,32 +300,32 @@ async fn join_network_interactive() -> Result<(), Box<dyn std::error::Error>> {
     println!("🌐 VX0 Network Interactive Join");
     println!("================================");
     println!();
-    
+
     println!("Welcome to the VX0 censorship-resistant network!");
     println!("This wizard will help you join the network and start contributing.");
     println!();
-    
+
     // Check if config exists
     if std::path::Path::new("config/vx0net.toml").exists() {
         println!("⚠️  Configuration file already exists.");
         println!("If you want to rejoin with new settings, delete config/vx0net.toml first.");
         return Ok(());
     }
-    
+
     println!("🎯 For the easiest setup, run: ./scripts/join-network.sh");
     println!("📖 For detailed instructions, see: JOINING.md");
     println!();
-    
+
     println!("Manual joining steps:");
     println!("1. Choose your node tier (Edge recommended for beginners)");
     println!("2. Get an available ASN in your tier range");
     println!("3. Configure your node settings");
     println!("4. Start the daemon with: vx0net start --join-network");
     println!();
-    
+
     println!("📋 Current network status:");
     show_network_status().await?;
-    
+
     Ok(())
 }
 
@@ -314,7 +333,7 @@ async fn show_network_status() -> Result<(), Box<dyn std::error::Error>> {
     println!("🌐 VX0 Network Status");
     println!("====================");
     println!();
-    
+
     // Try to load bootstrap registry
     if let Ok(registry_content) = std::fs::read_to_string("bootstrap-registry.json") {
         if let Ok(registry) = serde_json::from_str::<serde_json::Value>(&registry_content) {
@@ -322,57 +341,73 @@ async fn show_network_status() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(total) = network.get("total_nodes") {
                     println!("📊 Total nodes in network: {}", total);
                 }
-                
+
                 if let Some(stats) = network.get("network_stats") {
                     if let Some(health) = stats.get("network_health") {
-                        println!("💚 Network health: {}", health.as_str().unwrap_or("unknown"));
+                        println!(
+                            "💚 Network health: {}",
+                            health.as_str().unwrap_or("unknown")
+                        );
                     }
                     if let Some(latency) = stats.get("average_latency_ms") {
                         println!("⚡ Average latency: {}ms", latency);
                     }
                 }
-                
+
                 println!();
                 println!("🏗️  Available node types:");
-                
+
                 if let Some(backbone) = network.get("backbone_nodes") {
-                    println!("  Backbone nodes: {} active", backbone.as_array().unwrap_or(&vec![]).len());
+                    println!(
+                        "  Backbone nodes: {} active",
+                        backbone.as_array().unwrap_or(&vec![]).len()
+                    );
                 }
                 if let Some(regional) = network.get("regional_nodes") {
-                    println!("  Regional nodes: {} active", regional.as_array().unwrap_or(&vec![]).len());
+                    println!(
+                        "  Regional nodes: {} active",
+                        regional.as_array().unwrap_or(&vec![]).len()
+                    );
                 }
                 if let Some(edge) = network.get("edge_nodes") {
-                    println!("  Edge nodes: {} active", edge.as_array().unwrap_or(&vec![]).len());
+                    println!(
+                        "  Edge nodes: {} active",
+                        edge.as_array().unwrap_or(&vec![]).len()
+                    );
                 }
             }
         }
     } else {
         println!("❌ Cannot load network registry");
         println!("🔍 Checking connectivity to known bootstrap nodes...");
-        
+
         // Test connectivity to bootstrap nodes
         let bootstrap_nodes = [
             ("backbone1.vx0.network", 1179),
             ("regional1.vx0.network", 1179),
         ];
-        
+
         for (hostname, port) in &bootstrap_nodes {
             match tokio::time::timeout(
                 std::time::Duration::from_secs(5),
-                tokio::net::TcpSocket::new_v4().unwrap().connect(format!("{}:{}", hostname, port).parse().unwrap())
-            ).await {
+                tokio::net::TcpSocket::new_v4()
+                    .unwrap()
+                    .connect(format!("{}:{}", hostname, port).parse().unwrap()),
+            )
+            .await
+            {
                 Ok(Ok(_)) => println!("  ✅ {} is reachable", hostname),
                 _ => println!("  ❌ {} is not reachable", hostname),
             }
         }
     }
-    
+
     println!();
     println!("📍 To join the network:");
     println!("  ./scripts/join-network.sh   (automatic setup)");
-    println!("  vx0net join                  (this wizard)"); 
+    println!("  vx0net join                  (this wizard)");
     println!("  See JOINING.md               (manual setup)");
-    
+
     Ok(())
 }
 
@@ -380,7 +415,7 @@ async fn scan_available_asns(tier: &str) -> Result<(), Box<dyn std::error::Error
     println!("🔍 Scanning available ASNs for {} tier", tier);
     println!("=====================================");
     println!();
-    
+
     let (min_asn, max_asn, tier_name) = match tier.to_lowercase().as_str() {
         "backbone" => (65000, 65099, "Backbone"),
         "regional" => (65100, 65999, "Regional"),
@@ -390,26 +425,29 @@ async fn scan_available_asns(tier: &str) -> Result<(), Box<dyn std::error::Error
             return Ok(());
         }
     };
-    
+
     println!("📋 {} Tier ASN Range: {} - {}", tier_name, min_asn, max_asn);
     println!("📊 Total available ASNs: {}", max_asn - min_asn + 1);
     println!();
-    
+
     // In a real implementation, we would query the network to find used ASNs
     // For now, show some examples
     println!("💡 Recommended ASNs for new nodes:");
     for i in 0..5 {
-        let suggested_asn = min_asn + (i * 100) + (rand::random::<u32>() % 100);
+        let suggested_asn = min_asn + (i * 100) + (random::<u32>() % 100);
         if suggested_asn <= max_asn {
             println!("  ASN {}: Available ✅", suggested_asn);
         }
     }
-    
+
     println!();
-    println!("🎲 Random available ASN: {}", min_asn + (rand::random::<u32>() % (max_asn - min_asn + 1)));
+    println!(
+        "🎲 Random available ASN: {}",
+        min_asn + (random::<u32>() % (max_asn - min_asn + 1))
+    );
     println!();
     println!("ℹ️  You can use any unused ASN in the {} range.", tier_name);
     println!("   The network will automatically detect conflicts and reassign if needed.");
-    
+
     Ok(())
 }

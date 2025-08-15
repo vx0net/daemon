@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
-use vx0net_daemon::{Vx0Config, Vx0Node};
-use vx0net_daemon::node::PeerConnection;
 use vx0net_daemon::network::bgp::BGPDaemon;
+use vx0net_daemon::node::PeerConnection;
+use vx0net_daemon::{Vx0Config, Vx0Node};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,8 +22,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node2 = Arc::new(Vx0Node::new(config2.clone())?);
 
     println!("Created VX0 Nodes:");
-    println!("  Node 1: {} (ASN: {}) at {}", node1.hostname, node1.asn, node1.ipv4_addr);
-    println!("  Node 2: {} (ASN: {}) at {}", node2.hostname, node2.asn, node2.ipv4_addr);
+    println!(
+        "  Node 1: {} (ASN: {}) at {}",
+        node1.hostname, node1.asn, node1.ipv4_addr
+    );
+    println!(
+        "  Node 2: {} (ASN: {}) at {}",
+        node2.hostname, node2.asn, node2.ipv4_addr
+    );
     println!();
 
     // Start both nodes
@@ -48,21 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     bgp2.start().await?;
 
     println!("Started BGP daemons on both nodes");
-    
+
     // Simulate peer discovery and connection
     println!("\n=== Simulating Peer Discovery ===");
-    
-    let peer1_for_node2 = PeerConnection::new(
-        node1.node_id,
-        node1.asn,
-        node1.ipv4_addr.into(),
-    );
 
-    let peer2_for_node1 = PeerConnection::new(
-        node2.node_id,
-        node2.asn,
-        node2.ipv4_addr.into(),
-    );
+    let peer1_for_node2 = PeerConnection::new(node1.node_id, node1.asn, node1.ipv4_addr.into());
+
+    let peer2_for_node1 = PeerConnection::new(node2.node_id, node2.asn, node2.ipv4_addr.into());
 
     // Add peers to each node
     node1.add_peer(peer2_for_node1).await?;
@@ -78,18 +76,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Node 1 announces some VX0 routes
     let vx0_network1: ipnet::IpNet = "10.1.0.0/24".parse()?;
     let vx0_network2: ipnet::IpNet = "10.2.0.0/24".parse()?;
-    
+
     bgp1.add_route(
         vx0_network1,
         node1.ipv4_addr.into(),
-        vx0net_daemon::network::bgp::BGPOrigin::IGP
-    ).await?;
+        vx0net_daemon::network::bgp::BGPOrigin::IGP,
+    )
+    .await?;
 
     bgp2.add_route(
         vx0_network2,
         node2.ipv4_addr.into(),
-        vx0net_daemon::network::bgp::BGPOrigin::IGP
-    ).await?;
+        vx0net_daemon::network::bgp::BGPOrigin::IGP,
+    )
+    .await?;
 
     println!("Node 1 announced route: {}", vx0_network1);
     println!("Node 2 announced route: {}", vx0_network2);
@@ -101,37 +101,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Node 1 routing table ({} routes):", routes1.len());
     for route in routes1 {
-        println!("  {} via {} (AS path: {:?})", route.network, route.next_hop, route.as_path);
+        println!(
+            "  {} via {} (AS path: {:?})",
+            route.network, route.next_hop, route.as_path
+        );
     }
 
     println!("Node 2 routing table ({} routes):", routes2.len());
     for route in routes2 {
-        println!("  {} via {} (AS path: {:?})", route.network, route.next_hop, route.as_path);
+        println!(
+            "  {} via {} (AS path: {:?})",
+            route.network, route.next_hop, route.as_path
+        );
     }
 
     // Test .vx0 domain resolution
     println!("\n=== VX0 Domain Resolution ===");
-    
-    // Register some test services
-    node1.register_service(vx0net_daemon::node::HostedService {
-        service_id: uuid::Uuid::new_v4(),
-        name: "web".to_string(),
-        service_type: vx0net_daemon::node::ServiceType::WebServer,
-        domain: "web.node1.vx0".to_string(),
-        port: 80,
-        status: vx0net_daemon::node::ServiceStatus::Running,
-        metadata: std::collections::HashMap::new(),
-    }).await?;
 
-    node2.register_service(vx0net_daemon::node::HostedService {
-        service_id: uuid::Uuid::new_v4(),
-        name: "chat".to_string(),
-        service_type: vx0net_daemon::node::ServiceType::ChatServer,
-        domain: "chat.node2.vx0".to_string(),
-        port: 6667,
-        status: vx0net_daemon::node::ServiceStatus::Running,
-        metadata: std::collections::HashMap::new(),
-    }).await?;
+    // Register some test services
+    node1
+        .register_service(vx0net_daemon::node::HostedService {
+            service_id: uuid::Uuid::new_v4(),
+            name: "web".to_string(),
+            service_type: vx0net_daemon::node::ServiceType::WebServer,
+            domain: "web.node1.vx0".to_string(),
+            port: 80,
+            status: vx0net_daemon::node::ServiceStatus::Running,
+            metadata: std::collections::HashMap::new(),
+        })
+        .await?;
+
+    node2
+        .register_service(vx0net_daemon::node::HostedService {
+            service_id: uuid::Uuid::new_v4(),
+            name: "chat".to_string(),
+            service_type: vx0net_daemon::node::ServiceType::ChatServer,
+            domain: "chat.node2.vx0".to_string(),
+            port: 6667,
+            status: vx0net_daemon::node::ServiceStatus::Running,
+            metadata: std::collections::HashMap::new(),
+        })
+        .await?;
 
     println!("Registered services:");
     println!("  web.node1.vx0 (WebServer) on Node 1");
@@ -190,7 +200,13 @@ async fn load_node_config(path: &str) -> Result<Vx0Config, Box<dyn std::error::E
     }
 }
 
-fn create_default_config(hostname: &str, asn: u32, ip: &str, bgp_port: u16, ike_port: u16) -> Vx0Config {
+fn create_default_config(
+    hostname: &str,
+    asn: u32,
+    ip: &str,
+    bgp_port: u16,
+    ike_port: u16,
+) -> Vx0Config {
     use vx0net_daemon::config::*;
 
     Vx0Config {

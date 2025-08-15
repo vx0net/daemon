@@ -1,4 +1,4 @@
-use crate::node::{NodeId, PeerConnection, ConnectionStatus, ConnectionMetrics};
+use crate::node::{ConnectionMetrics, ConnectionStatus, NodeId, PeerConnection};
 use std::net::IpAddr;
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
@@ -17,12 +17,16 @@ impl PeerConnection {
 
     pub async fn connect(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.status = ConnectionStatus::Connecting;
-        
+
         let addr = format!("{}:179", self.peer_addr);
-        
+
         match timeout(Duration::from_secs(10), TcpStream::connect(&addr)).await {
             Ok(Ok(stream)) => {
-                tracing::info!("Successfully connected to peer {} at {}", self.peer_id, addr);
+                tracing::info!(
+                    "Successfully connected to peer {} at {}",
+                    self.peer_id,
+                    addr
+                );
                 self.status = ConnectionStatus::Connected;
                 self.last_seen = chrono::Utc::now();
                 drop(stream); // For now, just test the connection
@@ -47,7 +51,10 @@ impl PeerConnection {
     }
 
     pub fn is_connected(&self) -> bool {
-        matches!(self.status, ConnectionStatus::Connected | ConnectionStatus::Authenticated)
+        matches!(
+            self.status,
+            ConnectionStatus::Connected | ConnectionStatus::Authenticated
+        )
     }
 
     pub fn update_metrics(&mut self, latency_ms: u64, packet_loss: f32) {

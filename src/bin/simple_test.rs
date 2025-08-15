@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use vx0net_daemon::{Vx0Config, Vx0Node};
-use vx0net_daemon::node::{PeerConnection, ServiceType, ServiceStatus, HostedService};
 use vx0net_daemon::network::bgp::{BGPDaemon, BGPOrigin};
 use vx0net_daemon::network::dns::Vx0DNS;
+use vx0net_daemon::node::{HostedService, PeerConnection, ServiceStatus, ServiceType};
+use vx0net_daemon::{Vx0Config, Vx0Node};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,9 +24,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🖥️  Creating VX0 Network Nodes...");
     let node1 = Arc::new(Vx0Node::new(config1.clone())?);
     let node2 = Arc::new(Vx0Node::new(config2.clone())?);
-    
-    println!("Node 1: {} (ASN: {}) - {}", node1.hostname, node1.asn, node1.ipv4_addr);
-    println!("Node 2: {} (ASN: {}) - {}", node2.hostname, node2.asn, node2.ipv4_addr);
+
+    println!(
+        "Node 1: {} (ASN: {}) - {}",
+        node1.hostname, node1.asn, node1.ipv4_addr
+    );
+    println!(
+        "Node 2: {} (ASN: {}) - {}",
+        node2.hostname, node2.asn, node2.ipv4_addr
+    );
     println!("✅ Node creation successful\n");
 
     // Test 3: Node Startup (without network binding)
@@ -37,21 +43,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test 4: Peer Connection Simulation
     println!("🔗 Testing Peer Connection...");
-    let peer1_for_node2 = PeerConnection::new(
-        node1.node_id,
-        node1.asn,
-        node1.ipv4_addr.into(),
-    );
-    
-    let peer2_for_node1 = PeerConnection::new(
-        node2.node_id,
-        node2.asn,
-        node2.ipv4_addr.into(),
-    );
+    let peer1_for_node2 = PeerConnection::new(node1.node_id, node1.asn, node1.ipv4_addr.into());
+
+    let peer2_for_node1 = PeerConnection::new(node2.node_id, node2.asn, node2.ipv4_addr.into());
 
     node1.add_peer(peer2_for_node1).await?;
     node2.add_peer(peer1_for_node2).await?;
-    
+
     println!("Node 1 peers: {}", node1.get_peer_count().await);
     println!("Node 2 peers: {}", node2.get_peer_count().await);
     println!("✅ Peer connections established\n");
@@ -64,27 +62,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Add some test routes
     let vx0_net1: ipnet::IpNet = "10.1.0.0/24".parse()?;
     let vx0_net2: ipnet::IpNet = "10.2.0.0/24".parse()?;
-    
-    bgp1.add_route(vx0_net1, node1.ipv4_addr.into(), BGPOrigin::IGP).await?;
-    bgp2.add_route(vx0_net2, node2.ipv4_addr.into(), BGPOrigin::IGP).await?;
+
+    bgp1.add_route(vx0_net1, node1.ipv4_addr.into(), BGPOrigin::IGP)
+        .await?;
+    bgp2.add_route(vx0_net2, node2.ipv4_addr.into(), BGPOrigin::IGP)
+        .await?;
 
     let routes1 = bgp1.get_routes().await;
     let routes2 = bgp2.get_routes().await;
-    
+
     println!("Node 1 routes: {}", routes1.len());
     for route in &routes1 {
-        println!("  {} via {} (AS: {:?})", route.network, route.next_hop, route.as_path);
+        println!(
+            "  {} via {} (AS: {:?})",
+            route.network, route.next_hop, route.as_path
+        );
     }
-    
+
     println!("Node 2 routes: {}", routes2.len());
     for route in &routes2 {
-        println!("  {} via {} (AS: {:?})", route.network, route.next_hop, route.as_path);
+        println!(
+            "  {} via {} (AS: {:?})",
+            route.network, route.next_hop, route.as_path
+        );
     }
     println!("✅ BGP routing system working\n");
 
     // Test 6: Service Registration
     println!("🛰️  Testing Service Registration...");
-    
+
     let web_service = HostedService {
         service_id: uuid::Uuid::new_v4(),
         name: "web".to_string(),
@@ -110,22 +116,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let services1 = node1.services.read().await;
     let services2 = node2.services.read().await;
-    
+
     println!("Node 1 services: {}", services1.len());
     for service in services1.iter() {
-        println!("  {} ({:?}) at {}", service.name, service.service_type, service.domain);
+        println!(
+            "  {} ({:?}) at {}",
+            service.name, service.service_type, service.domain
+        );
     }
-    
+
     println!("Node 2 services: {}", services2.len());
     for service in services2.iter() {
-        println!("  {} ({:?}) at {}", service.name, service.service_type, service.domain);
+        println!(
+            "  {} ({:?}) at {}",
+            service.name, service.service_type, service.domain
+        );
     }
     println!("✅ Service registration working\n");
 
     // Test 7: DNS System
     println!("🌐 Testing VX0 DNS System...");
     let mut dns = Vx0DNS::new();
-    
+
     // Register the services in DNS
     dns.register_service("web.node1.vx0".to_string(), node1.ipv4_addr.into())?;
     dns.register_service("chat.node2.vx0".to_string(), node2.ipv4_addr.into())?;
@@ -150,7 +162,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test 8: Network Statistics
     println!("📊 Network Statistics:");
     println!("  Total Nodes: 2");
-    println!("  Total Peers: {}", node1.get_peer_count().await + node2.get_peer_count().await);
+    println!(
+        "  Total Peers: {}",
+        node1.get_peer_count().await + node2.get_peer_count().await
+    );
     println!("  Total Routes: {}", routes1.len() + routes2.len());
     println!("  Total Services: {}", services1.len() + services2.len());
     println!("  VX0 Domains Active: 3 (web.node1.vx0, chat.node2.vx0, vx0.network)");
@@ -164,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Service Registration");
     println!("✅ VX0 DNS Resolution (.vx0 domains)");
     println!("✅ Network Monitoring");
-    
+
     println!("\n🏗️  Infrastructure Summary:");
     println!("• Two nodes successfully connected");
     println!("• BGP routes exchanged");
@@ -179,7 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Clean shutdown completed");
 
     println!("\n🌟 The VX0 Network is ready for deployment!");
-    
+
     Ok(())
 }
 

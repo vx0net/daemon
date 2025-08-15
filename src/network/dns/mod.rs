@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
-use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 
 pub mod resolver;
@@ -88,10 +88,7 @@ impl Vx0DNS {
                 expire: 604800,
                 minimum: 86400,
             },
-            ns_records: vec![
-                "ns1.vx0".to_string(),
-                "ns2.vx0".to_string(),
-            ],
+            ns_records: vec!["ns1.vx0".to_string(), "ns2.vx0".to_string()],
         };
 
         self.zones.insert("vx0".to_string(), vx0_zone);
@@ -156,7 +153,7 @@ impl Vx0DNS {
 
     async fn query_distributed_dns(&self, domain: &str) -> Option<IpAddr> {
         tracing::debug!("Querying distributed DNS for {}", domain);
-        
+
         // For now, return a placeholder IP for vx0.network
         if domain == "vx0.network" {
             return Some("10.0.1.1".parse().unwrap());
@@ -187,10 +184,7 @@ impl Vx0DNS {
 
     fn add_record(&mut self, record: DNSRecord) {
         let domain = record.name.clone();
-        self.records
-            .entry(domain)
-            .or_insert_with(Vec::new)
-            .push(record);
+        self.records.entry(domain).or_default().push(record);
     }
 
     pub fn get_records(&self, domain: &str) -> Option<&Vec<DNSRecord>> {
@@ -202,15 +196,15 @@ impl Vx0DNS {
         tracing::info!("VX0 DNS server listening on {}", bind_addr);
 
         let mut buf = [0; 512];
-        
+
         loop {
             match socket.recv_from(&mut buf).await {
                 Ok((size, addr)) => {
                     tracing::debug!("DNS query from {} ({} bytes)", addr, size);
-                    
+
                     // In a real implementation, we would parse the DNS query
                     // and respond with appropriate DNS records
-                    
+
                     // For now, just log the query
                 }
                 Err(e) => {

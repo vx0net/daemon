@@ -1,6 +1,6 @@
-use crate::network::dns::{Vx0DNS, DNSRecord, RecordType, DNSError};
-use tokio::net::UdpSocket;
+use crate::network::dns::{DNSError, DNSRecord, RecordType, Vx0DNS};
 use std::net::SocketAddr;
+use tokio::net::UdpSocket;
 
 pub struct Vx0DNSServer {
     dns: Vx0DNS,
@@ -25,7 +25,7 @@ impl Vx0DNSServer {
             match socket.recv_from(&mut buf).await {
                 Ok((size, client_addr)) => {
                     tracing::debug!("DNS query from {} ({} bytes)", client_addr, size);
-                    
+
                     if let Err(e) = self.handle_query(&socket, &buf[..size], client_addr).await {
                         tracing::error!("Error handling DNS query: {}", e);
                     }
@@ -48,7 +48,7 @@ impl Vx0DNSServer {
     ) -> Result<(), DNSError> {
         // Simplified DNS query handling
         // In a real implementation, we would parse the DNS packet format
-        
+
         let query_str = String::from_utf8_lossy(query);
         tracing::debug!("DNS query content: {}", query_str);
 
@@ -78,16 +78,17 @@ impl Vx0DNSServer {
         format!("{} IN A {}", domain, ip).into_bytes()
     }
 
-    pub fn register_service(&mut self, domain: String, ip: std::net::IpAddr) -> Result<(), DNSError> {
+    pub fn register_service(
+        &mut self,
+        domain: String,
+        ip: std::net::IpAddr,
+    ) -> Result<(), DNSError> {
         self.dns.register_service(domain, ip)
     }
 
     pub fn add_record(&mut self, record: DNSRecord) {
         let domain = record.name.clone();
-        self.dns.records
-            .entry(domain)
-            .or_insert_with(Vec::new)
-            .push(record);
+        self.dns.records.entry(domain).or_default().push(record);
     }
 
     pub fn get_records(&self, domain: &str) -> Option<&Vec<DNSRecord>> {
@@ -95,6 +96,12 @@ impl Vx0DNSServer {
     }
 
     pub fn create_vx0_network_record(&mut self) -> Result<(), DNSError> {
+        // Check if vx0.network record already exists
+        if self.get_records("vx0.network").is_some() {
+            tracing::debug!("vx0.network DNS record already exists");
+            return Ok(());
+        }
+
         let record = DNSRecord {
             name: "vx0.network".to_string(),
             record_type: RecordType::A,
@@ -141,12 +148,12 @@ mod tests {
     #[test]
     fn test_record_creation() {
         let mut server = Vx0DNSServer::new("127.0.0.1:53".parse().unwrap());
-        
+
         let result = server.register_service(
             "test.vx0".to_string(),
-            IpAddr::V4(Ipv4Addr::new(10, 0, 3, 1))
+            IpAddr::V4(Ipv4Addr::new(10, 0, 3, 1)),
         );
-        
+
         assert!(result.is_ok());
     }
 
@@ -155,10 +162,10 @@ mod tests {
         let mut server = Vx0DNSServer::new("127.0.0.1:53".parse().unwrap());
         let result = server.create_vx0_network_record();
         assert!(result.is_ok());
-        
+
         let records = server.get_records("vx0.network");
         assert!(records.is_some());
-        
+
         if let Some(records) = records {
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].data, "10.0.1.1");
