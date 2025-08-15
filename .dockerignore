@@ -1,0 +1,45 @@
+# Build artifacts
+target/
+Cargo.lock
+
+# Development files
+.git/
+.gitignore
+*.log
+*.tmp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (include only essential docs)
+*.md
+!README.md
+!DOCKER.md
+
+# Test files
+tests/
+*_test.rs
+
+# Local configuration (use templates instead)
+config/local/
+*.local.toml
+
+# Certificates (mount separately)
+certs/*.key
+certs/*.crt
+!certs/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/

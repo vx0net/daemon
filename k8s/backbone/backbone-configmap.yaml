@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vx0-backbone-config
+  namespace: vx0-network
+  labels:
+    app: vx0-backbone
+    tier: backbone
+data:
+  asn: "65001"
+  location: "US-East-1"
+  public_ip: "203.0.113.1"  # Will be overridden by deployment script
+  config: |
+    [node]
+    hostname = "backbone-k8s.vx0.network"
+    asn = 65001
+    tier = "Backbone"
+    location = "US-East-1"
+    ipv4_address = "203.0.113.1"
+    ipv6_address = "2001:db8::1"
+
+    [network.bgp]
+    router_id = "203.0.113.1"
+    listen_port = 1179
+    hold_time = 90
+    keepalive_time = 30
+
+    [network.dns]
+    listen_port = 5353
+    vx0_dns_servers = ["10.0.0.2:53", "10.0.0.3:53"]
+    cache_size = 5000
+
+    [network.routing]
+    max_paths = 8
+    local_preference = 300
+    med = 0
+
+    [security.ike]
+    listen_port = 4500
+    dh_group = 14
+    encryption_algorithm = "AES-256"
+    hash_algorithm = "SHA-256"
+    prf_algorithm = "HMAC-SHA256"
+
+    [security.certificates]
+    ca_cert_path = "/app/certs/ca.crt"
+    node_cert_path = "/app/certs/backbone.crt"
+    node_key_path = "/app/certs/backbone.key"
+
+    [security.encryption]
+    cipher = "AES-256-GCM"
+    key_size = 32
+    iv_size = 12
+
+    [services]
+    enable_discovery = true
+    discovery_port = 8080
+    service_ttl = 300
+
+    [monitoring]
+    enable_metrics = true
+    metrics_port = 9090
+    log_level = "info"
+
+    # Auto-discovery: Connect to other known backbone nodes
+    [bootstrap]
+    nodes = [
+        { hostname = "backbone2.vx0.network", ip = "203.0.113.2", asn = 65002 },
+        { hostname = "backbone3.vx0.network", ip = "203.0.113.3", asn = 65003 },
+    ]
+
+    [security.psk]
+    default = "vx0-backbone-secure-key-change-in-production"

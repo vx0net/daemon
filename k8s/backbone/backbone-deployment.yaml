@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vx0-backbone
+  namespace: vx0-network
+  labels:
+    app: vx0-backbone
+    tier: backbone
+    component: network-node
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: vx0-backbone
+  template:
+    metadata:
+      labels:
+        app: vx0-backbone
+        tier: backbone
+        component: network-node
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: vx0-backbone
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: vx0-backbone
+        image: vx0net-daemon:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 1179
+          name: bgp
+          protocol: TCP
+        - containerPort: 4500
+          name: ike
+          protocol: UDP
+        - containerPort: 5353
+          name: dns
+          protocol: UDP
+        - containerPort: 8080
+          name: discovery
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: VX0NET_LOG_LEVEL
+          value: "info"
+        - name: VX0NET_NODE_TIER
+          value: "Backbone"
+        - name: VX0NET_NODE_HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: VX0NET_NODE_ASN
+          valueFrom:
+            configMapKeyRef:
+              name: vx0-backbone-config
+              key: asn
+        - name: VX0NET_LOCATION
+          valueFrom:
+            configMapKeyRef:
+              name: vx0-backbone-config
+              key: location
+        - name: VX0NET_PUBLIC_IP
+          valueFrom:
+            configMapKeyRef:
+              name: vx0-backbone-config
+              key: public_ip
+        volumeMounts:
+        - name: config
+          mountPath: /app/vx0net.toml
+          subPath: vx0net.toml
+          readOnly: true
+        - name: certs
+          mountPath: /app/certs
+          readOnly: true
+        - name: data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 9090
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            - NET_RAW
+            drop:
+            - ALL
+      volumes:
+      - name: config
+        configMap:
+          name: vx0-backbone-config
+          items:
+          - key: config
+            path: vx0net.toml
+      - name: certs
+        secret:
+          secretName: vx0-backbone-certs
+          defaultMode: 0600
+      - name: data
+        persistentVolumeClaim:
+          claimName: vx0-backbone-data
+      - name: logs
+        emptyDir: {}
+      nodeSelector:
+        vx0.network/node-type: backbone
+      tolerations:
+      - key: vx0.network/backbone
+        operator: Equal
+        value: "true"
+        effect: NoSchedule

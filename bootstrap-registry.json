@@ -1,0 +1,175 @@
+{
+  "vx0_network_bootstrap_registry": {
+    "version": "1.0.0",
+    "last_updated": "2025-01-15T00:00:00Z",
+    "description": "Public registry of VX0 network bootstrap nodes",
+    "total_nodes": 8,
+    "backbone_nodes": [
+      {
+        "hostname": "backbone1.vx0.network",
+        "ip": "203.0.113.1",
+        "asn": 65001,
+        "location": "US-East-1",
+        "uptime": "99.9%",
+        "operator": "VX0 Foundation",
+        "contact": "admin@vx0.network",
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 50,
+        "current_peers": 12,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      },
+      {
+        "hostname": "backbone2.vx0.network", 
+        "ip": "203.0.113.2",
+        "asn": 65002,
+        "location": "EU-West-1",
+        "uptime": "99.8%",
+        "operator": "VX0 Europe",
+        "contact": "eu-admin@vx0.network",
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 50,
+        "current_peers": 8,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      },
+      {
+        "hostname": "backbone3.vx0.network",
+        "ip": "203.0.113.3", 
+        "asn": 65003,
+        "location": "Asia-Pacific-1",
+        "uptime": "99.7%",
+        "operator": "VX0 Asia",
+        "contact": "asia-admin@vx0.network",
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 50,
+        "current_peers": 6,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      }
+    ],
+    "regional_nodes": [
+      {
+        "hostname": "regional1.vx0.network",
+        "ip": "203.0.114.1",
+        "asn": 65101,
+        "location": "US-East-1",
+        "uptime": "99.5%",
+        "operator": "East Coast Collective",
+        "contact": "admin@east.vx0.network",
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 20,
+        "current_peers": 15,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      },
+      {
+        "hostname": "regional2.vx0.network",
+        "ip": "203.0.114.2",
+        "asn": 65102,
+        "location": "US-West-1", 
+        "uptime": "99.3%",
+        "operator": "West Coast Mesh",
+        "contact": "admin@west.vx0.network",
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 20,
+        "current_peers": 12,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      },
+      {
+        "hostname": "regional3.vx0.network",
+        "ip": "203.0.114.3",
+        "asn": 65103,
+        "location": "EU-West-1",
+        "uptime": "99.1%",
+        "operator": "European Privacy Alliance",
+        "contact": "admin@eu.vx0.network", 
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 20,
+        "current_peers": 9,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      },
+      {
+        "hostname": "regional4.vx0.network",
+        "ip": "203.0.114.4",
+        "asn": 65104,
+        "location": "Asia-Pacific-1",
+        "uptime": "98.9%",
+        "operator": "Asia Freedom Network",
+        "contact": "admin@asia.vx0.network",
+        "features": ["bgp", "ike", "dns", "discovery"],
+        "max_peers": 20,
+        "current_peers": 7,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z"
+      }
+    ],
+    "edge_nodes": [
+      {
+        "hostname": "community1.vx0.network",
+        "ip": "203.0.115.1",
+        "asn": 66001,
+        "location": "Community Lab",
+        "uptime": "95.2%",
+        "operator": "Mesh Community",
+        "contact": "admin@community.vx0.network",
+        "features": ["bgp", "ike", "dns", "services"],
+        "max_peers": 5,
+        "current_peers": 3,
+        "status": "active",
+        "last_seen": "2025-01-15T00:00:00Z",
+        "services": [
+          {
+            "name": "Community Chat",
+            "domain": "chat.community1.vx0",
+            "type": "ChatServer",
+            "port": 6667
+          },
+          {
+            "name": "File Share",
+            "domain": "files.community1.vx0",
+            "type": "FileServer", 
+            "port": 8080
+          }
+        ]
+      }
+    ],
+    "joining_instructions": {
+      "automatic": "Run ./scripts/join-network.sh for automatic setup",
+      "manual": "See JOINING.md for detailed manual instructions",
+      "requirements": {
+        "ports": [1179, 4500, 8080, 9090],
+        "os": ["Linux", "macOS", "Windows (WSL2)"],
+        "hardware": {
+          "edge": "1 CPU, 512MB RAM, 10GB disk",
+          "regional": "1 CPU, 1GB RAM, 20GB disk", 
+          "backbone": "2 CPU, 2GB RAM, 40GB disk"
+        }
+      }
+    },
+    "network_stats": {
+      "total_asns_allocated": 15,
+      "available_asns": {
+        "backbone": 97,
+        "regional": 896,
+        "edge": 3999
+      },
+      "geographic_distribution": {
+        "north_america": 4,
+        "europe": 2, 
+        "asia_pacific": 2
+      },
+      "network_health": "excellent",
+      "average_latency_ms": 45,
+      "redundancy_factor": 3.2
+    },
+    "contribution_guide": {
+      "add_bootstrap_node": "Open PR with node details after 30 days uptime",
+      "report_issues": "Use GitHub issues for technical problems",
+      "update_registry": "Community members can update this file",
+      "node_verification": "New nodes verified by community consensus"
+    }
+  }
+}

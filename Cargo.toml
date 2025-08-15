@@ -1,0 +1,69 @@
+[package]
+name = "vx0net-daemon"
+version = "0.1.0"
+edition = "2021"
+authors = ["VX0 Network Team"]
+description = "VX0 Network daemon - censorship-resistant networking system"
+
+[dependencies]
+# Networking
+tokio = { version = "1.0", features = ["full"] }
+tokio-util = "0.7"
+# trust-dns-server = "0.23"  # Using simpler DNS implementation for now
+# trust-dns-client = "0.23"
+
+# BGP Implementation (using available versions)
+# bgp-rs = "0.6"  # Commented out for now, will implement simplified BGP
+ipnet = { version = "2.9", features = ["serde"] }
+
+# Cryptography
+ring = "0.17"
+rustls = "0.21"
+x509-parser = "0.15"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Configuration
+config = "0.13"
+
+# Monitoring
+prometheus = "0.13"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.0", features = ["derive"] }
+rand = "0.8"
+
+[lib]
+name = "vx0net_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vx0net"
+path = "src/main.rs"
+
+[[bin]]
+name = "test_nodes"
+path = "src/bin/test_nodes.rs"
+
+[[bin]]
+name = "simple_test"
+path = "src/bin/simple_test.rs"
+
+[[bin]]
+name = "hierarchical_test"
+path = "src/bin/hierarchical_test.rs"

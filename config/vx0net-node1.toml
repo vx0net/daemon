@@ -1,0 +1,53 @@
+# VX0 Network Node Configuration - Node 1
+# This is an example configuration for the first test node
+
+[node]
+hostname = "node1.vx0"
+asn = 65001
+tier = "Edge"
+location = "Test Lab Node 1"
+ipv4_address = "192.168.1.100"
+ipv6_address = "fe80::1"
+
+[network.bgp]
+router_id = "192.168.1.100"
+listen_port = 1179  # Non-privileged port for testing
+hold_time = 90
+keepalive_time = 30
+
+[network.dns]
+listen_port = 5353  # Non-privileged port for testing
+upstream_servers = ["8.8.8.8:53", "8.8.4.4:53"]
+cache_size = 1000
+
+[network.routing]
+max_paths = 4
+local_preference = 100
+med = 0
+
+[security.ike]
+listen_port = 4500  # Non-privileged port for testing
+dh_group = 14
+encryption_algorithm = "AES-256"
+hash_algorithm = "SHA-256"
+prf_algorithm = "HMAC-SHA256"
+
+[security.certificates]
+ca_cert_path = "config/certs/ca.crt"
+node_cert_path = "config/certs/node1.crt"
+node_key_path = "config/certs/node1.key"
+
+[security.encryption]
+cipher = "AES-256-GCM"
+key_size = 32
+iv_size = 12
+
+[services]
+enable_discovery = true
+discovery_port = 8080
+service_ttl = 300
+
+[monitoring]
+enable_metrics = true
+metrics_port = 9090
+log_level = "debug"

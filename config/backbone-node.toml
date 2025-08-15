@@ -1,0 +1,61 @@
+# VX0 Network Docker Configuration - Backbone Node
+
+[node]
+hostname = "backbone-docker.vx0"
+asn = 65001
+tier = "Backbone"
+location = "Docker Container"
+ipv4_address = "172.20.0.30"
+ipv6_address = "fe80::30"
+
+[network.bgp]
+router_id = "172.20.0.30"
+listen_port = 1179
+hold_time = 90
+keepalive_time = 30
+
+[network.dns]
+listen_port = 5353
+vx0_dns_servers = ["10.0.0.2:53", "10.0.0.3:53"]
+cache_size = 5000
+
+[network.routing]
+max_paths = 8
+local_preference = 300
+med = 0
+
+[security.ike]
+listen_port = 4500
+dh_group = 14
+encryption_algorithm = "AES-256"
+hash_algorithm = "SHA-256"
+prf_algorithm = "HMAC-SHA256"
+
+[security.certificates]
+ca_cert_path = "/app/certs/ca.crt"
+node_cert_path = "/app/certs/backbone.crt"
+node_key_path = "/app/certs/backbone.key"
+
+[security.encryption]
+cipher = "AES-256-GCM"
+key_size = 32
+iv_size = 12
+
+[services]
+enable_discovery = true
+discovery_port = 8080
+service_ttl = 300
+
+[monitoring]
+enable_metrics = true
+metrics_port = 9090
+log_level = "info"
+
+[bootstrap]
+nodes = [
+    { hostname = "backbone2.vx0.network", ip = "203.0.113.2", asn = 65002 },
+    { hostname = "backbone3.vx0.network", ip = "203.0.113.3", asn = 65003 },
+]
+
+[security.psk]
+default = "docker-vx0-network-key-change-in-production"

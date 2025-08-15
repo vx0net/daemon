@@ -1,0 +1,68 @@
+# VX0 Network Production Configuration - Backbone Node 1
+# Deploy this on your first VPS (e.g., Digital Ocean, Linode, AWS)
+
+[node]
+hostname = "backbone1.vx0.network"
+asn = 65001
+tier = "Backbone"
+location = "US-East-1"
+# REPLACE WITH YOUR VPS PUBLIC IP
+ipv4_address = "YOUR_VPS_PUBLIC_IP"
+ipv6_address = "fe80::1"
+
+[network.bgp]
+# REPLACE WITH YOUR VPS PUBLIC IP
+router_id = "YOUR_VPS_PUBLIC_IP"
+listen_port = 1179  # Use non-privileged port
+hold_time = 90
+keepalive_time = 30
+
+[network.dns]
+listen_port = 5353  # Use non-privileged port
+vx0_dns_servers = ["10.0.0.2:53", "10.0.0.3:53"]
+cache_size = 1000
+
+[network.routing]
+max_paths = 4
+local_preference = 100
+med = 0
+
+[security.ike]
+listen_port = 4500  # Standard IKE port
+dh_group = 14
+encryption_algorithm = "AES-256"
+hash_algorithm = "SHA-256"
+prf_algorithm = "HMAC-SHA256"
+
+[security.certificates]
+ca_cert_path = "certs/ca.crt"
+node_cert_path = "certs/backbone1.crt"
+node_key_path = "certs/backbone1.key"
+
+[security.encryption]
+cipher = "AES-256-GCM"
+key_size = 32
+iv_size = 12
+
+[services]
+enable_discovery = true
+discovery_port = 8080
+service_ttl = 300
+
+[monitoring]
+enable_metrics = true
+metrics_port = 9090
+log_level = "info"
+
+# Bootstrap nodes - other nodes this node should try to connect to initially
+[bootstrap]
+nodes = [
+    # Add other backbone/regional nodes here
+    # { hostname = "backbone2.vx0.network", ip = "OTHER_VPS_IP", asn = 65002 },
+    # { hostname = "regional1.vx0.network", ip = "REGIONAL_VPS_IP", asn = 65101 },
+]
+
+# Pre-shared keys for IKE authentication
+[security.psk]
+# These should be different for each node pair in production
+default = "vx0-network-secure-key-change-in-production"

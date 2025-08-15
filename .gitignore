@@ -1,0 +1,76 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local configuration and secrets
+config/local/
+*.local.toml
+.env.local
+
+# Generated certificates (use templates instead)
+certs/*.key
+certs/*.crt
+certs/*.pem
+!certs/.gitkeep
+
+# Docker volumes and data
+data/
+volumes/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if any JavaScript tools)
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Local development
+.local/
+local/
+
+# Build outputs
+dist/
+build/
+
+# Lock files
+*lock
+*lock.json
+
+# Backup files
+*.bak
+*.backup
+
+# Test outputs
+test-results/
+coverage/
+
+# Local Docker override
+docker-compose.override.yml
+
+# Auto-update logs
+auto-update.log
+
+# VPS deployment specific
+vps-deploy/*.key
+vps-deploy/*.crt

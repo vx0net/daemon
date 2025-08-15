@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vx0-discovery
+  namespace: vx0-network
+  labels:
+    app: vx0-discovery
+    component: discovery-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vx0-discovery
+  template:
+    metadata:
+      labels:
+        app: vx0-discovery
+        component: discovery-service
+    spec:
+      serviceAccountName: vx0-discovery
+      containers:
+      - name: discovery-api
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: discovery-config
+          mountPath: /usr/share/nginx/html
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+      volumes:
+      - name: discovery-config
+        configMap:
+          name: vx0-discovery-registry
+      - name: nginx-config
+        configMap:
+          name: vx0-discovery-nginx
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vx0-discovery
+  namespace: vx0-network
+  labels:
+    app: vx0-discovery
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+  selector:
+    app: vx0-discovery
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vx0-discovery-nginx
+  namespace: vx0-network
+data:
+  default.conf: |
+    server {
+        listen 80;
+        location /health {
+            return 200 'healthy';
+            add_header Content-Type text/plain;
+        }
+        
+        location /registry {
+            alias /usr/share/nginx/html/;
+            try_files $uri $uri.json /bootstrap-registry.json;
+            add_header Access-Control-Allow-Origin *;
+            add_header Content-Type application/json;
+        }
+        
+        location /api/v1/register {
+            return 501 'Node registration not implemented yet';
+            add_header Content-Type text/plain;
+        }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vx0-discovery-registry
+  namespace: vx0-network
+data:
+  bootstrap-registry.json: |
+    {
+      "vx0_network_bootstrap_registry": {
+        "version": "1.0.0",
+        "last_updated": "2025-01-15T00:00:00Z",
+        "description": "Kubernetes-managed VX0 network bootstrap registry",
+        "auto_discovery": {
+          "enabled": true,
+          "update_interval_seconds": 300,
+          "health_check_interval_seconds": 60,
+          "methods": ["k8s-service-discovery", "dns-resolution", "bootstrap-nodes"]
+        },
+        "backbone_nodes": [],
+        "regional_nodes": [],
+        "edge_nodes": [],
+        "network_stats": {
+          "total_asns_allocated": 0,
+          "available_asns": {
+            "backbone": 100,
+            "regional": 900,
+            "edge": 4000
+          },
+          "network_health": "excellent",
+          "average_latency_ms": 25
+        }
+      }
+    }

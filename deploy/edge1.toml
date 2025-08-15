@@ -1,0 +1,64 @@
+# VX0 Network Production Configuration - Edge Node 1
+# Deploy this on your third VPS or home server
+
+[node]
+hostname = "edge1.vx0.network"
+asn = 66001
+tier = "Edge"
+location = "Home-Lab"
+# REPLACE WITH YOUR VPS PUBLIC IP
+ipv4_address = "YOUR_VPS_PUBLIC_IP"
+ipv6_address = "fe80::3"
+
+[network.bgp]
+# REPLACE WITH YOUR VPS PUBLIC IP
+router_id = "YOUR_VPS_PUBLIC_IP"
+listen_port = 1179
+hold_time = 90
+keepalive_time = 30
+
+[network.dns]
+listen_port = 5353
+vx0_dns_servers = ["10.0.0.2:53", "10.0.0.3:53"]
+cache_size = 1000
+
+[network.routing]
+max_paths = 2  # Edge nodes have fewer paths
+local_preference = 100
+med = 0
+
+[security.ike]
+listen_port = 4500
+dh_group = 14
+encryption_algorithm = "AES-256"
+hash_algorithm = "SHA-256"
+prf_algorithm = "HMAC-SHA256"
+
+[security.certificates]
+ca_cert_path = "certs/ca.crt"
+node_cert_path = "certs/edge1.crt"
+node_key_path = "certs/edge1.key"
+
+[security.encryption]
+cipher = "AES-256-GCM"
+key_size = 32
+iv_size = 12
+
+[services]
+enable_discovery = true
+discovery_port = 8082
+service_ttl = 300
+
+[monitoring]
+enable_metrics = true
+metrics_port = 9092
+log_level = "info"
+
+# Bootstrap nodes - connect to regional nodes only
+[bootstrap]
+nodes = [
+    { hostname = "regional1.vx0.network", ip = "REGIONAL1_VPS_IP", asn = 65101 },
+]
+
+[security.psk]
+default = "vx0-network-secure-key-change-in-production"
