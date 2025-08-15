@@ -1,5 +1,5 @@
 # VX0 Network Daemon - Multi-stage Docker build
-FROM rust:1.76-slim-bookworm AS builder
+FROM rust:1.83-slim-bookworm AS builder
 
 # Install additional dependencies
 RUN apt-get update && apt-get install -y \
