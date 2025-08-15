@@ -10,16 +10,8 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Copy manifests
-COPY Cargo.toml ./
-
-# Build dependencies first (for better caching)
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -f target/release/deps/vx0net*
-
-# Copy source code
-COPY src ./src
+# Copy all files (simpler approach for CI reliability)
+COPY . .
 
 # Build for release
 RUN cargo build --release

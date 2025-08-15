@@ -65,7 +65,9 @@ jobs:
       uses: docker/setup-buildx-action@v3
       
     - name: Build Docker image
-      run: docker build -t vx0net-daemon:test .
+      run: |
+        echo "Building Docker image..."
+        docker build -t vx0net-daemon:test . --progress=plain
       
     - name: Test Docker image
       run: |
