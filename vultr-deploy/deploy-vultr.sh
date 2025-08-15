@@ -192,22 +192,15 @@ create_instance() {
     local location="$4"
     local asn="$5"
     
+    print_info "DEBUG: Starting create_instance function"
+    print_info "DEBUG: label=$label, region=$region, node_type=$node_type, location=$location, asn=$asn"
     print_step "Creating VPS instance: $label in $region..."
     
-    # Generate startup script
+    # Generate minimal startup script for testing
+    print_info "Generating startup script..."
     local startup_script
-    startup_script=$(echo "#!/bin/bash
-set -e
-echo 'VX0 Node Setup Starting...'
-apt-get update -y
-apt-get install -y docker.io curl jq
-systemctl start docker
-systemctl enable docker
-mkdir -p /opt/vx0-network
-echo 'VX0 $node_type Node in $location (ASN $asn) deployed at \$(date)' > /opt/vx0-network/status.txt
-docker pull ghcr.io/vx0net/daemon:latest || echo 'Docker pull will continue in background'
-echo 'VX0 deployment completed on VPS'
-echo 'Setup completed at \$(date)' >> /opt/vx0-network/status.txt" | base64 -w 0)
+    startup_script="IyEvYmluL2Jhc2gKZWNobyAiVlgwIE5vZGUgZGVwbG95bWVudCBzdGFydGVkIGF0ICQoZGF0ZSkiID4gL3RtcC92eDBfc3RhdHVzLnR4dA=="
+    print_info "Startup script generated successfully"
 
     # The rest of the startup script was moved above as user_data
     # Commenting out the local execution part:
@@ -362,8 +355,8 @@ echo 'Setup completed at \$(date)' >> /opt/vx0-network/status.txt" | base64 -w 0
 # # EOF
 # # )
 #     
-#     # Create instance
-#     local instance_data
+    # Create instance
+    local instance_data
     instance_data=$(cat << EOF
 {
     "region": "$region",
@@ -507,8 +500,10 @@ deploy_backbone_nodes() {
         
         print_step "Deploying Backbone node: $location"
         
+        print_info "DEBUG: About to call create_instance with: $label $region Backbone $location $asn"
         local instance_id
         instance_id=$(create_instance "$label" "$region" "Backbone" "$location" "$asn")
+        print_info "DEBUG: create_instance returned: $?"
         
         if [ $? -eq 0 ]; then
             backbone_instances="$backbone_instances $location:$instance_id"
