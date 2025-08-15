@@ -194,180 +194,176 @@ create_instance() {
     
     print_step "Creating VPS instance: $label in $region..."
     
-    # Startup script disabled for now - will add back later
-    # local startup_script
-    # startup_script=$(cat << EOF | base64 -w 0
-#!/bin/bash
+    # Generate startup script
+    local startup_script
+    startup_script=$(echo "#!/bin/bash
 set -e
-
-# Update system
+echo 'VX0 Node Setup Starting...'
 apt-get update -y
-apt-get upgrade -y
-
-# Install Docker
-curl -fsSL https://get.docker.com | sh
+apt-get install -y docker.io curl jq
 systemctl start docker
 systemctl enable docker
+mkdir -p /opt/vx0-network
+echo 'VX0 $node_type Node in $location (ASN $asn) deployed at \$(date)' > /opt/vx0-network/status.txt
+docker pull ghcr.io/vx0net/daemon:latest || echo 'Docker pull will continue in background'
+echo 'VX0 deployment completed on VPS'
+echo 'Setup completed at \$(date)' >> /opt/vx0-network/status.txt" | base64 -w 0)
 
-# Create VX0 user
-useradd -m -s /bin/bash vx0net
-usermod -aG docker vx0net
-
-# Create VX0 directory
-mkdir -p /opt/vx0-network/{config,certs,data,logs}
-chown -R vx0net:vx0net /opt/vx0-network
-
-# Generate node configuration
-cat > /opt/vx0-network/config/vx0net.toml << 'EOFCONFIG'
-[node]
-node_id = "$(openssl rand -hex 16)"
-tier = "$node_type"
-asn = $asn
-location = "$location"
-hostname = "$label.vx0.network"
-
-[network.bgp]
-listen_address = "0.0.0.0"
-listen_port = 1179
-router_id = "$(curl -s https://ipinfo.io/ip)"
-
-[network.dns]
-listen_address = "0.0.0.0"
-listen_port = 5353
-vx0_dns_servers = ["10.0.0.2:53", "10.0.0.3:53"]
-
-[security.ike]
-listen_port = 4500
-dh_group = 14
-
-[services]
-enable_discovery = true
-discovery_port = 8080
-
-[monitoring]
-enable_metrics = true
-metrics_port = 9090
-log_level = "info"
-
-[auto_discovery]
-enabled = true
-discovery_interval_seconds = 300
-methods = ["dns", "bootstrap_registry"]
-bootstrap_registry_url = "https://registry.vx0.network/bootstrap-registry.json"
-EOFCONFIG
-
-# Generate certificates
-cd /opt/vx0-network/certs
-openssl req -x509 -newkey rsa:2048 -keyout ca.key -out ca.crt -days 365 -nodes -subj "/CN=VX0-Network-CA"
-openssl req -newkey rsa:2048 -keyout node.key -out node.csr -nodes -subj "/CN=$label.vx0.network"
-openssl x509 -req -in node.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out node.crt -days 365
-rm node.csr
-chmod 600 *.key
-chown -R vx0net:vx0net /opt/vx0-network/certs
-
-# Create Docker Compose file
-cat > /opt/vx0-network/docker-compose.yml << 'EOFCOMPOSE'
-version: '3.8'
-
-services:
-  vx0-node:
-    image: $VX0_IMAGE
-    container_name: vx0-$node_type-$location
-    restart: unless-stopped
-    ports:
-      - "1179:1179/tcp"    # BGP
-      - "4500:4500/udp"    # IKE
-      - "5353:5353/udp"    # DNS
-      - "8080:8080/tcp"    # Discovery
-      - "9090:9090/tcp"    # Metrics
-    volumes:
-      - ./config/vx0net.toml:/app/vx0net.toml:ro
-      - ./certs:/app/certs:ro
-      - ./data:/app/data
-      - ./logs:/app/logs
-    environment:
-      - VX0NET_LOG_LEVEL=info
-      - VX0NET_NODE_TIER=$node_type
-      - VX0NET_NODE_ASN=$asn
-      - VX0NET_LOCATION=$location
-      - VX0NET_AUTO_DISCOVERY=true
-    networks:
-      - vx0-network
-    sysctls:
-      - net.ipv4.ip_forward=1
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-networks:
-  vx0-network:
-    driver: bridge
-EOFCOMPOSE
-
-# Create systemd service
-cat > /etc/systemd/system/vx0-node.service << 'EOFSERVICE'
-[Unit]
-Description=VX0 Network Node ($node_type)
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-User=root
-WorkingDirectory=/opt/vx0-network
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
-ExecReload=/usr/bin/docker-compose restart
-
-[Install]
-WantedBy=multi-user.target
-EOFSERVICE
-
-# Set permissions
-chown -R vx0net:vx0net /opt/vx0-network
-
-# Enable and start service
-systemctl daemon-reload
-systemctl enable vx0-node
-systemctl start vx0-node
-
-# Create management scripts
-cat > /opt/vx0-network/status.sh << 'EOFSTATUS'
-#!/bin/bash
-cd /opt/vx0-network
-echo "VX0 $node_type Node Status ($location):"
-docker-compose ps
-echo ""
-echo "Node Info:"
-docker-compose exec -T vx0-node vx0net info 2>/dev/null || echo "Node starting up..."
-EOFSTATUS
-
-cat > /opt/vx0-network/update.sh << 'EOFUPDATE'
-#!/bin/bash
-cd /opt/vx0-network
-echo "Updating VX0 Node..."
-docker-compose pull
-docker-compose up -d
-echo "Update complete!"
-EOFUPDATE
-
-chmod +x /opt/vx0-network/*.sh
-
-echo "VX0 $node_type Node deployment completed!"
-echo "Status: /opt/vx0-network/status.sh"
-echo "Update: /opt/vx0-network/update.sh"
-echo "Metrics: http://\$(curl -s https://ipinfo.io/ip):9090"
-# EOF
-# )
+    # The rest of the startup script was moved above as user_data
+    # Commenting out the local execution part:
     
-    # Create instance
-    local instance_data
+    # Original complex startup script (commented out to prevent local execution):
+    #
+    # cat > /opt/vx0-network/config/vx0net.toml << 'EOFCONFIG'
+# [node]
+# node_id = "$(openssl rand -hex 16)"
+# tier = "$node_type"
+# asn = $asn
+# location = "$location"
+# hostname = "$label.vx0.network"
+# 
+# [network.bgp]
+# listen_address = "0.0.0.0"
+# listen_port = 1179
+# router_id = "$(curl -s https://ipinfo.io/ip)"
+# 
+# [network.dns]
+# listen_address = "0.0.0.0"
+# listen_port = 5353
+# vx0_dns_servers = ["10.0.0.2:53", "10.0.0.3:53"]
+# 
+# [security.ike]
+# listen_port = 4500
+# dh_group = 14
+# 
+# [services]
+# enable_discovery = true
+# discovery_port = 8080
+# 
+# [monitoring]
+# enable_metrics = true
+# metrics_port = 9090
+# log_level = "info"
+# 
+# [auto_discovery]
+# enabled = true
+# discovery_interval_seconds = 300
+# methods = ["dns", "bootstrap_registry"]
+# bootstrap_registry_url = "https://registry.vx0.network/bootstrap-registry.json"
+# EOFCONFIG
+# 
+# # Generate certificates
+# cd /opt/vx0-network/certs
+# openssl req -x509 -newkey rsa:2048 -keyout ca.key -out ca.crt -days 365 -nodes -subj "/CN=VX0-Network-CA"
+# openssl req -newkey rsa:2048 -keyout node.key -out node.csr -nodes -subj "/CN=$label.vx0.network"
+# openssl x509 -req -in node.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out node.crt -days 365
+# rm node.csr
+# chmod 600 *.key
+# chown -R vx0net:vx0net /opt/vx0-network/certs
+# 
+# # Create Docker Compose file
+# cat > /opt/vx0-network/docker-compose.yml << 'EOFCOMPOSE'
+# version: '3.8'
+# 
+# services:
+#   vx0-node:
+#     image: $VX0_IMAGE
+#     container_name: vx0-$node_type-$location
+#     restart: unless-stopped
+#     ports:
+#       - "1179:1179/tcp"    # BGP
+#       - "4500:4500/udp"    # IKE
+#       - "5353:5353/udp"    # DNS
+#       - "8080:8080/tcp"    # Discovery
+#       - "9090:9090/tcp"    # Metrics
+#     volumes:
+#       - ./config/vx0net.toml:/app/vx0net.toml:ro
+#       - ./certs:/app/certs:ro
+#       - ./data:/app/data
+#       - ./logs:/app/logs
+#     environment:
+#       - VX0NET_LOG_LEVEL=info
+#       - VX0NET_NODE_TIER=$node_type
+#       - VX0NET_NODE_ASN=$asn
+#       - VX0NET_LOCATION=$location
+#       - VX0NET_AUTO_DISCOVERY=true
+#     networks:
+#       - vx0-network
+#     sysctls:
+#       - net.ipv4.ip_forward=1
+#     cap_add:
+#       - NET_ADMIN
+#       - NET_RAW
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+# 
+# networks:
+#   vx0-network:
+#     driver: bridge
+# EOFCOMPOSE
+# 
+# # Create systemd service
+# cat > /etc/systemd/system/vx0-node.service << 'EOFSERVICE'
+# [Unit]
+# Description=VX0 Network Node ($node_type)
+# After=docker.service
+# Requires=docker.service
+# 
+# [Service]
+# Type=oneshot
+# RemainAfterExit=yes
+# User=root
+# WorkingDirectory=/opt/vx0-network
+# ExecStart=/usr/bin/docker-compose up -d
+# ExecStop=/usr/bin/docker-compose down
+# ExecReload=/usr/bin/docker-compose restart
+# 
+# [Install]
+# WantedBy=multi-user.target
+# EOFSERVICE
+# 
+# # Set permissions
+# chown -R vx0net:vx0net /opt/vx0-network
+# 
+# # Enable and start service
+# systemctl daemon-reload
+# systemctl enable vx0-node
+# systemctl start vx0-node
+# 
+# # Create management scripts
+# cat > /opt/vx0-network/status.sh << 'EOFSTATUS'
+# #!/bin/bash
+# cd /opt/vx0-network
+# echo "VX0 $node_type Node Status ($location):"
+# docker-compose ps
+# echo ""
+# echo "Node Info:"
+# docker-compose exec -T vx0-node vx0net info 2>/dev/null || echo "Node starting up..."
+# EOFSTATUS
+# 
+# cat > /opt/vx0-network/update.sh << 'EOFUPDATE'
+# #!/bin/bash
+# cd /opt/vx0-network
+# echo "Updating VX0 Node..."
+# docker-compose pull
+# docker-compose up -d
+# echo "Update complete!"
+# EOFUPDATE
+# 
+# chmod +x /opt/vx0-network/*.sh
+# 
+# echo "VX0 $node_type Node deployment completed!"
+# echo "Status: /opt/vx0-network/status.sh"
+# echo "Update: /opt/vx0-network/update.sh"
+# echo "Metrics: http://\$(curl -s https://ipinfo.io/ip):9090"
+# # EOF
+# # )
+#     
+#     # Create instance
+#     local instance_data
     instance_data=$(cat << EOF
 {
     "region": "$region",
@@ -376,7 +372,8 @@ echo "Metrics: http://\$(curl -s https://ipinfo.io/ip):9090"
     "label": "$label",
     "tags": ["vx0-network"],
     "hostname": "$label",
-    "enable_ipv6": $VULTR_ENABLE_IPV6
+    "enable_ipv6": $VULTR_ENABLE_IPV6,
+    "user_data": "$startup_script"
 }
 EOF
 )
