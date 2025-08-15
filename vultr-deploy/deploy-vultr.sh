@@ -73,11 +73,10 @@ get_regional_asn() {
 BACKBONE_LOCATIONS="us-east us-west eu-west eu-central asia-pacific asia-east"
 REGIONAL_LOCATIONS="us-central us-south eu-north asia-south oceania canada"
 
-# Vultr instance configuration
-VULTR_PLAN="vc2-1c-1gb"        # 1 vCPU, 1GB RAM - $6/month
-VULTR_OS="387"                 # Ubuntu 22.04 LTS
+# Vultr instance configuration  
+VULTR_PLAN="vc2-1c-1gb"        # 1 vCPU, 1GB RAM, Regular CPU - $5/month
+VULTR_OS="2284"                # Ubuntu 24.04 LTS x64
 VULTR_ENABLE_IPV6="true"
-VULTR_ENABLE_PRIVATE_NETWORK="false"
 
 print_header() {
     echo -e "${CYAN}"
@@ -178,6 +177,13 @@ get_vultr_plans() {
     vultr_api "GET" "/plans" | jq -r '.plans[] | select(.type == "vc2") | "\(.id): \(.vcpu_count) vCPU, \(.ram)MB RAM, \(.disk)GB SSD - $\(.monthly_cost)"' | sort
 }
 
+# Get available operating systems
+get_vultr_os() {
+    print_step "Fetching available operating systems..."
+    
+    vultr_api "GET" "/os" | jq -r '.os[] | "\(.id): \(.name)"' | sort
+}
+
 # Create VPS instance
 create_instance() {
     local label="$1"
@@ -188,9 +194,9 @@ create_instance() {
     
     print_step "Creating VPS instance: $label in $region..."
     
-    # Generate startup script
-    local startup_script
-    startup_script=$(cat << EOF | base64 -w 0
+    # Startup script disabled for now - will add back later
+    # local startup_script
+    # startup_script=$(cat << EOF | base64 -w 0
 #!/bin/bash
 set -e
 
@@ -357,8 +363,8 @@ echo "VX0 $node_type Node deployment completed!"
 echo "Status: /opt/vx0-network/status.sh"
 echo "Update: /opt/vx0-network/update.sh"
 echo "Metrics: http://\$(curl -s https://ipinfo.io/ip):9090"
-EOF
-)
+# EOF
+# )
     
     # Create instance
     local instance_data
@@ -368,16 +374,14 @@ EOF
     "plan": "$VULTR_PLAN",
     "os_id": $VULTR_OS,
     "label": "$label",
-    "tag": "vx0-network",
+    "tags": ["vx0-network"],
     "hostname": "$label",
-    "enable_ipv6": $VULTR_ENABLE_IPV6,
-    "enable_private_network": $VULTR_ENABLE_PRIVATE_NETWORK,
-    "script_id": "",
-    "user_data": "$startup_script"
+    "enable_ipv6": $VULTR_ENABLE_IPV6
 }
 EOF
 )
     
+    print_info "Sending API request to create instance..."
     local response
     response=$(vultr_api "POST" "/instances" "$instance_data")
     
@@ -387,7 +391,16 @@ EOF
         print_status "Instance created: $instance_id"
         echo "$instance_id"
     else
-        print_error "Failed to create instance: $response"
+        print_error "Failed to create instance"
+        print_error "Response: $response"
+        
+        # Check for specific error messages
+        if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
+            local error_msg
+            error_msg=$(echo "$response" | jq -r '.error // "Unknown error"')
+            print_error "API Error: $error_msg"
+        fi
+        
         return 1
     fi
 }
@@ -401,37 +414,71 @@ wait_for_instance() {
     
     local status="pending"
     local attempts=0
-    local max_attempts=60
+    local max_attempts=30  # Reduced from 60 to 30 (5 minutes total)
+    local wait_interval=10
     
     while [ "$status" != "active" ] && [ $attempts -lt $max_attempts ]; do
-        sleep 10
+        sleep $wait_interval
         local response
         response=$(vultr_api "GET" "/instances/$instance_id")
+        
+        # Debug: Show raw response for troubleshooting
+        echo "Debug - Instance Status Response: $response" >&2
+        
         status=$(echo "$response" | jq -r '.instance.status // "unknown"')
+        local server_status=$(echo "$response" | jq -r '.instance.server_status // "unknown"')
+        local power_status=$(echo "$response" | jq -r '.instance.power_status // "unknown"')
         
         case "$status" in
             "active")
-                print_status "Instance $label is now active"
+                print_status "Instance $label is now active (server: $server_status, power: $power_status)"
+                break
                 ;;
-            "pending"|"installing")
-                print_info "Instance $label status: $status (waiting...)"
+            "pending")
+                print_info "Instance $label status: $status (server: $server_status, power: $power_status) [${attempts}/${max_attempts}]"
+                ;;
+            "installing")
+                print_info "Instance $label status: $status (installing OS, please wait...) [${attempts}/${max_attempts}]"
+                ;;
+            "resizing")
+                print_info "Instance $label status: $status (resizing, please wait...) [${attempts}/${max_attempts}]"
                 ;;
             *)
-                print_warning "Instance $label status: $status"
+                print_warning "Instance $label status: $status (server: $server_status, power: $power_status) [${attempts}/${max_attempts}]"
                 ;;
         esac
         
         ((attempts++))
+        
+        # If we're taking too long, offer to continue waiting
+        if [ $attempts -eq 20 ]; then
+            print_warning "Instance $label is taking longer than expected to become active..."
+            print_info "Current status: $status (server: $server_status, power: $power_status)"
+            print_info "Continuing to wait (will timeout at ${max_attempts} attempts)..."
+        fi
     done
     
     if [ "$status" != "active" ]; then
-        print_error "Instance $label failed to become active after $max_attempts attempts"
+        print_error "Instance $label failed to become active after $max_attempts attempts ($((max_attempts * wait_interval / 60)) minutes)"
+        print_error "Final status: $status (server: $server_status, power: $power_status)"
+        print_info "You can check the instance manually in the Vultr dashboard"
+        print_info "Instance ID: $instance_id"
         return 1
     fi
     
     # Get instance IP
     local ip
     ip=$(echo "$response" | jq -r '.instance.main_ip // "unknown"')
+    
+    if [ "$ip" = "unknown" ] || [ "$ip" = "null" ] || [ -z "$ip" ]; then
+        print_warning "Instance $label is active but IP is not yet assigned"
+        print_info "Waiting a bit more for IP assignment..."
+        sleep 30
+        response=$(vultr_api "GET" "/instances/$instance_id")
+        ip=$(echo "$response" | jq -r '.instance.main_ip // "unknown"')
+    fi
+    
+    print_status "Instance $label ready with IP: $ip"
     echo "$ip"
 }
 
@@ -606,7 +653,7 @@ list_instances() {
     echo ""
     
     if echo "$response" | jq -e '.instances' >/dev/null 2>&1; then
-        echo "$response" | jq -r '.instances[] | select(.tag == "vx0-network") | "\(.label): \(.status) @ \(.main_ip) (Region: \(.region), Plan: \(.plan))"' | \
+        echo "$response" | jq -r '.instances[] | select(.tags and (.tags | index("vx0-network"))) | "\(.label): \(.status) @ \(.main_ip) (Region: \(.region), Plan: \(.plan))"' | \
         while IFS= read -r line; do
             if [[ "$line" == *"active"* ]]; then
                 echo -e "  ${GREEN}✅ $line${NC}"
@@ -621,6 +668,39 @@ list_instances() {
     fi
     
     echo ""
+}
+
+# Clean up test instances  
+cleanup_test_instances() {
+    print_step "Cleaning up any existing test instances..."
+    
+    local response
+    response=$(vultr_api "GET" "/instances")
+    
+    if echo "$response" | jq -e '.instances' >/dev/null 2>&1; then
+        local test_instances
+        test_instances=$(echo "$response" | jq -r '.instances[] | select(.tags and (.tags | index("vx0-network"))) | "\(.id):\(.label)"')
+        
+        if [ -z "$test_instances" ]; then
+            print_info "No test instances to clean up"
+            return 0
+        fi
+        
+        echo "$test_instances" | while IFS=':' read -r id label; do
+            print_info "Deleting test instance: $label ($id)"
+            vultr_api "DELETE" "/instances/$id" >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                print_status "Deleted: $label"
+            else
+                print_warning "Failed to delete: $label"
+            fi
+        done
+        
+        print_info "Waiting 10 seconds for cleanup to complete..."
+        sleep 10
+    else
+        print_info "No instances found"
+    fi
 }
 
 # Delete instances by pattern
@@ -691,6 +771,8 @@ show_help() {
     echo "  delete <pattern>                Delete instances matching pattern"
     echo "  regions                         Show available Vultr regions"
     echo "  plans                           Show available Vultr plans"
+    echo "  os                              Show available operating systems"
+    echo "  cleanup                         Delete all VX0 test instances"
     echo "  help                            Show this help"
     echo ""
         echo "Available Backbone Locations:"
@@ -751,6 +833,14 @@ main() {
         plans)
             check_prerequisites
             get_vultr_plans
+            ;;
+        os)
+            check_prerequisites
+            get_vultr_os
+            ;;
+        cleanup)
+            check_prerequisites
+            cleanup_test_instances
             ;;
         help|--help|-h)
             show_help
