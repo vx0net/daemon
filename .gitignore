@@ -72,5 +72,5 @@ docker-compose.override.yml
 auto-update.log
 
 # VPS deployment specific
-vps-deploy/*.key
-vps-deploy/*.crt
+vps-deploy/*
+vultr-deploy/*
