@@ -58,6 +58,15 @@ Perfect for non-technical users:
 curl -fsSL https://raw.githubusercontent.com/vx0net/daemon/main/install-vx0.sh | bash
 ```
 
+### ☁️ Vultr Cloud Deployment
+Deploy Backbone & Regional nodes globally:
+```bash
+git clone https://github.com/vx0net/daemon.git
+cd daemon/vultr-deploy
+./setup.sh  # Interactive setup
+./deploy.sh deploy-all  # Deploy global network
+```
+
 ### 🐳 Docker
 For developers and advanced users:
 ```bash
