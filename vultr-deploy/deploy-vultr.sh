@@ -20,42 +20,58 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 VULTR_API_URL="https://api.vultr.com/v2"
 VX0_IMAGE="ghcr.io/vx0net/daemon:latest"
 
-# Node configuration
-declare -A BACKBONE_REGIONS=(
-    ["us-east"]="ewr"      # New York
-    ["us-west"]="lax"      # Los Angeles  
-    ["eu-west"]="lon"      # London
-    ["eu-central"]="fra"   # Frankfurt
-    ["asia-pacific"]="sgp" # Singapore
-    ["asia-east"]="nrt"    # Tokyo
-)
+# Node configuration functions (compatible with Bash 3.2+)
+get_backbone_region() {
+    case "$1" in
+        "us-east") echo "ewr" ;;      # New York
+        "us-west") echo "lax" ;;      # Los Angeles  
+        "eu-west") echo "lon" ;;      # London
+        "eu-central") echo "fra" ;;   # Frankfurt
+        "asia-pacific") echo "sgp" ;; # Singapore
+        "asia-east") echo "nrt" ;;    # Tokyo
+        *) echo "" ;;
+    esac
+}
 
-declare -A REGIONAL_REGIONS=(
-    ["us-central"]="ord"   # Chicago
-    ["us-south"]="dfw"     # Dallas
-    ["eu-north"]="sto"     # Stockholm
-    ["asia-south"]="bom"   # Mumbai
-    ["oceania"]="syd"      # Sydney
-    ["canada"]="tor"       # Toronto
-)
+get_regional_region() {
+    case "$1" in
+        "us-central") echo "ord" ;;   # Chicago
+        "us-south") echo "dfw" ;;     # Dallas
+        "eu-north") echo "sto" ;;     # Stockholm
+        "asia-south") echo "bom" ;;   # Mumbai
+        "oceania") echo "syd" ;;      # Sydney
+        "canada") echo "tor" ;;       # Toronto
+        *) echo "" ;;
+    esac
+}
 
-declare -A BACKBONE_ASNS=(
-    ["us-east"]="65001"
-    ["us-west"]="65002"
-    ["eu-west"]="65003"
-    ["eu-central"]="65004"
-    ["asia-pacific"]="65005"
-    ["asia-east"]="65006"
-)
+get_backbone_asn() {
+    case "$1" in
+        "us-east") echo "65001" ;;
+        "us-west") echo "65002" ;;
+        "eu-west") echo "65003" ;;
+        "eu-central") echo "65004" ;;
+        "asia-pacific") echo "65005" ;;
+        "asia-east") echo "65006" ;;
+        *) echo "" ;;
+    esac
+}
 
-declare -A REGIONAL_ASNS=(
-    ["us-central"]="65101"
-    ["us-south"]="65102"
-    ["eu-north"]="65103"
-    ["asia-south"]="65104"
-    ["oceania"]="65105"
-    ["canada"]="65106"
-)
+get_regional_asn() {
+    case "$1" in
+        "us-central") echo "65101" ;;
+        "us-south") echo "65102" ;;
+        "eu-north") echo "65103" ;;
+        "asia-south") echo "65104" ;;
+        "oceania") echo "65105" ;;
+        "canada") echo "65106" ;;
+        *) echo "" ;;
+    esac
+}
+
+# Location lists for iteration
+BACKBONE_LOCATIONS="us-east us-west eu-west eu-central asia-pacific asia-east"
+REGIONAL_LOCATIONS="us-central us-south eu-north asia-south oceania canada"
 
 # Vultr instance configuration
 VULTR_PLAN="vc2-1c-1gb"        # 1 vCPU, 1GB RAM - $6/month
@@ -430,16 +446,19 @@ deploy_backbone_nodes() {
     print_info "Deploying Backbone nodes in locations: ${locations[*]}"
     echo ""
     
-    declare -A backbone_instances
+    # Use space-separated string instead of associative array for Bash 3.2 compatibility
+    local backbone_instances=""
     
     for location in "${locations[@]}"; do
-        if [ -z "${BACKBONE_REGIONS[$location]}" ]; then
+        local region
+        region=$(get_backbone_region "$location")
+        if [ -z "$region" ]; then
             print_warning "Unknown backbone location: $location (skipping)"
             continue
         fi
         
-        local region="${BACKBONE_REGIONS[$location]}"
-        local asn="${BACKBONE_ASNS[$location]}"
+        local asn
+        asn=$(get_backbone_asn "$location")
         local label="vx0-backbone-$location"
         
         print_step "Deploying Backbone node: $location"
@@ -448,7 +467,7 @@ deploy_backbone_nodes() {
         instance_id=$(create_instance "$label" "$region" "Backbone" "$location" "$asn")
         
         if [ $? -eq 0 ]; then
-            backbone_instances["$location"]="$instance_id"
+            backbone_instances="$backbone_instances $location:$instance_id"
             print_status "Backbone node queued: $location ($instance_id)"
         else
             print_error "Failed to deploy Backbone node: $location"
@@ -462,15 +481,18 @@ deploy_backbone_nodes() {
     print_info "Waiting for all Backbone nodes to become active..."
     echo ""
     
-    declare -A backbone_ips
+    local backbone_ips=""
     
-    for location in "${!backbone_instances[@]}"; do
-        local instance_id="${backbone_instances[$location]}"
-        local ip
-        ip=$(wait_for_instance "$instance_id" "backbone-$location")
-        
-        if [ $? -eq 0 ]; then
-            backbone_ips["$location"]="$ip"
+    for entry in $backbone_instances; do
+        if [ -n "$entry" ]; then
+            local location="${entry%:*}"
+            local instance_id="${entry#*:}"
+            local ip
+            ip=$(wait_for_instance "$instance_id" "backbone-$location")
+            
+            if [ $? -eq 0 ]; then
+                backbone_ips="$backbone_ips $location:$ip"
+            fi
         fi
     done
     
@@ -479,12 +501,16 @@ deploy_backbone_nodes() {
     print_status "Backbone nodes deployment completed!"
     echo ""
     echo "📊 Deployed Backbone Nodes:"
-    for location in "${!backbone_ips[@]}"; do
-        local ip="${backbone_ips[$location]}"
-        local asn="${BACKBONE_ASNS[$location]}"
-        echo "  🌐 $location: ASN $asn @ $ip"
-        echo "      Dashboard: http://$ip:9090"
-        echo "      Status: ssh root@$ip '/opt/vx0-network/status.sh'"
+    for entry in $backbone_ips; do
+        if [ -n "$entry" ]; then
+            local location="${entry%:*}"
+            local ip="${entry#*:}"
+            local asn
+            asn=$(get_backbone_asn "$location")
+            echo "  🌐 $location: ASN $asn @ $ip"
+            echo "      Dashboard: http://$ip:9090"
+            echo "      Status: ssh root@$ip '/opt/vx0-network/status.sh'"
+        fi
     done
     echo ""
 }
@@ -500,16 +526,18 @@ deploy_regional_nodes() {
     print_info "Deploying Regional nodes in locations: ${locations[*]}"
     echo ""
     
-    declare -A regional_instances
+    local regional_instances=""
     
     for location in "${locations[@]}"; do
-        if [ -z "${REGIONAL_REGIONS[$location]}" ]; then
+        local region
+        region=$(get_regional_region "$location")
+        if [ -z "$region" ]; then
             print_warning "Unknown regional location: $location (skipping)"
             continue
         fi
         
-        local region="${REGIONAL_REGIONS[$location]}"
-        local asn="${REGIONAL_ASNS[$location]}"
+        local asn
+        asn=$(get_regional_asn "$location")
         local label="vx0-regional-$location"
         
         print_step "Deploying Regional node: $location"
@@ -518,7 +546,7 @@ deploy_regional_nodes() {
         instance_id=$(create_instance "$label" "$region" "Regional" "$location" "$asn")
         
         if [ $? -eq 0 ]; then
-            regional_instances["$location"]="$instance_id"
+            regional_instances="$regional_instances $location:$instance_id"
             print_status "Regional node queued: $location ($instance_id)"
         else
             print_error "Failed to deploy Regional node: $location"
@@ -532,15 +560,18 @@ deploy_regional_nodes() {
     print_info "Waiting for all Regional nodes to become active..."
     echo ""
     
-    declare -A regional_ips
+    local regional_ips=""
     
-    for location in "${!regional_instances[@]}"; do
-        local instance_id="${regional_instances[$location]}"
-        local ip
-        ip=$(wait_for_instance "$instance_id" "regional-$location")
-        
-        if [ $? -eq 0 ]; then
-            regional_ips["$location"]="$ip"
+    for entry in $regional_instances; do
+        if [ -n "$entry" ]; then
+            local location="${entry%:*}"
+            local instance_id="${entry#*:}"
+            local ip
+            ip=$(wait_for_instance "$instance_id" "regional-$location")
+            
+            if [ $? -eq 0 ]; then
+                regional_ips="$regional_ips $location:$ip"
+            fi
         fi
     done
     
@@ -549,12 +580,16 @@ deploy_regional_nodes() {
     print_status "Regional nodes deployment completed!"
     echo ""
     echo "📊 Deployed Regional Nodes:"
-    for location in "${!regional_ips[@]}"; do
-        local ip="${regional_ips[$location]}"
-        local asn="${REGIONAL_ASNS[$location]}"
-        echo "  🌐 $location: ASN $asn @ $ip"
-        echo "      Dashboard: http://$ip:9090"
-        echo "      Status: ssh root@$ip '/opt/vx0-network/status.sh'"
+    for entry in $regional_ips; do
+        if [ -n "$entry" ]; then
+            local location="${entry%:*}"
+            local ip="${entry#*:}"
+            local asn
+            asn=$(get_regional_asn "$location")
+            echo "  🌐 $location: ASN $asn @ $ip"
+            echo "      Dashboard: http://$ip:9090"
+            echo "      Status: ssh root@$ip '/opt/vx0-network/status.sh'"
+        fi
     done
     echo ""
 }
@@ -658,14 +693,18 @@ show_help() {
     echo "  plans                           Show available Vultr plans"
     echo "  help                            Show this help"
     echo ""
-    echo "Available Backbone Locations:"
-    for location in "${!BACKBONE_REGIONS[@]}"; do
-        echo "  $location (${BACKBONE_REGIONS[$location]})"
+        echo "Available Backbone Locations:"
+    for location in $BACKBONE_LOCATIONS; do
+        local region
+        region=$(get_backbone_region "$location")
+        echo "  $location ($region)"
     done
     echo ""
     echo "Available Regional Locations:"
-    for location in "${!REGIONAL_REGIONS[@]}"; do
-        echo "  $location (${REGIONAL_REGIONS[$location]})"
+    for location in $REGIONAL_LOCATIONS; do
+        local region
+        region=$(get_regional_region "$location")
+        echo "  $location ($region)"
     done
     echo ""
     echo "Examples:"
