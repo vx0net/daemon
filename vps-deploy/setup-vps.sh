@@ -395,10 +395,8 @@ version: '3.8'
 
 services:
   vx0-backbone:
-    image: vx0net-daemon:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/vx0net/daemon:latest
+    pull_policy: always
     container_name: vx0-backbone-${location}
     restart: unless-stopped
     ports:
@@ -536,11 +534,10 @@ main() {
     print_status "VPS setup completed successfully!"
     echo ""
     echo -e "${BLUE}📋 Next Steps:${NC}"
-    echo "1. Copy VX0 daemon source code to $VX0_DIR/"
-    echo "2. Build Docker image: cd $VX0_DIR && docker build -t vx0net-daemon:latest ."
-    echo "3. Start services: systemctl start vx0net"
-    echo "4. Check status: systemctl status vx0net"
-    echo "5. View logs: docker-compose -f $VX0_DIR/docker-compose.yml logs -f"
+    echo "1. Start services: systemctl start vx0net"
+    echo "2. Check status: systemctl status vx0net"
+    echo "3. View logs: docker-compose -f $VX0_DIR/docker-compose.yml logs -f"
+    echo "4. Monitor health: curl http://localhost:9090/health"
     echo ""
     echo -e "${BLUE}🌐 Auto-Discovery:${NC}"
     echo "This node will automatically discover and connect to other backbone nodes"
