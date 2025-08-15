@@ -14,6 +14,8 @@ WORKDIR /app
 COPY . .
 
 # Build for release
+ENV CARGO_NET_RETRY=10
+ENV RUSTFLAGS="-C target-cpu=generic"
 RUN cargo build --release
 
 # Runtime stage
