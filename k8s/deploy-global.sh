@@ -191,7 +191,7 @@ deploy_backbone_node() {
     local asn=${BACKBONE_ASNS[$location]}
     local location_name=${LOCATIONS[$location]}
     
-    print_info "Deploying backbone node for $location ($location_name)..."
+    print_info "Deploying backbone node for $location - $location_name..."
     
     # Generate certificates
     generate_certificates "$location"
@@ -353,9 +353,41 @@ update_discovery_registry() {
     done
     
     # Update discovery registry configmap
+    local registry_data
+    registry_data=$(cat << EOF | jq -c ".vx0_network_bootstrap_registry.backbone_nodes = $backbone_nodes"
+{
+  "vx0_network_bootstrap_registry": {
+    "version": "1.0.0",
+    "last_updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "description": "Kubernetes-managed VX0 network bootstrap registry",
+    "auto_discovery": {
+      "enabled": true,
+      "update_interval_seconds": 300,
+      "health_check_interval_seconds": 60,
+      "methods": ["k8s-service-discovery", "dns-resolution", "bootstrap-nodes"]
+    },
+    "backbone_nodes": [],
+    "regional_nodes": [],
+    "edge_nodes": [],
+    "network_stats": {
+      "total_asns_allocated": ${#BACKBONE_ASNS[@]},
+      "available_asns": {
+        "backbone": $((100 - ${#BACKBONE_ASNS[@]})),
+        "regional": 900,
+        "edge": 4000
+      },
+      "network_health": "excellent",
+      "average_latency_ms": 25
+    }
+  }
+}
+EOF
+)
+    
     kubectl patch configmap vx0-discovery-registry -n vx0-network --type='merge' -p="{
         \"data\": {
-            \"bootstrap-registry.json\": \"$(jq -c ".vx0_network_bootstrap_registry.backbone_nodes = $backbone_nodes" <<< '{"vx0_network_bootstrap_registry":{"version":"1.0.0","last_updated":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","description":"Kubernetes-managed VX0 network bootstrap registry","auto_discovery":{"enabled":true,"update_interval_seconds":300,"health_check_interval_seconds":60,"methods":["k8s-service-discovery","dns-resolution","bootstrap-nodes"]},"backbone_nodes":[],"regional_nodes":[],"edge_nodes":[],"network_stats":{"total_asns_allocated":'${#BACKBONE_ASNS[@]}',"available_asns":{"backbone":'$((100 - ${#BACKBONE_ASNS[@]}))',"regional":900,"edge":4000},"network_health":"excellent","average_latency_ms":25}}}' | sed 's/"/\\"/g')\""
+            \"bootstrap-registry.json\": \"$(echo "$registry_data" | sed 's/"/\\"/g')\"
+        }
     }"
     
     print_status "Discovery registry updated"
@@ -371,7 +403,7 @@ wait_for_external_ips() {
             service "vx0-backbone-$location" -n vx0-network --timeout=300s || true
     done
     
-    print_status "External IP assignment completed (some may still be pending)"
+    print_status "External IP assignment completed - some may still be pending"
 }
 
 # Display deployment status
@@ -388,7 +420,7 @@ show_deployment_status() {
         local external_ip
         external_ip=$(kubectl get service "vx0-backbone-$location" -n vx0-network -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "PENDING")
         
-        echo "  $location ($location_name): ASN $asn @ $external_ip"
+        echo "  $location - $location_name: ASN $asn @ $external_ip"
     done
     
     echo ""
@@ -474,7 +506,7 @@ case "${1:-deploy}" in
         echo "Usage: $0 [command] [options]"
         echo ""
         echo "Commands:"
-        echo "  deploy [locations...]   Deploy global VX0 network (default: us-east eu-west asia-pacific)"
+        echo "  deploy [locations...]   Deploy global VX0 network - default: us-east eu-west asia-pacific"
         echo "  status                  Show deployment status"
         echo "  cleanup                 Remove all VX0 network resources"
         echo "  add-location LOC IP     Add backbone node in specific location"
